@@ -1,0 +1,27 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:15.2-alpine3.17
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=s7er9tg4m
+      - POSTGRES_DB=chat
+
+  server:
+    image: eruhini2022/chat-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/www/chat.eruhini.top:/public
+      # - ../frontend/public:/public
+    environment:
+      - DATABASE_URL=postgres://root:s7er9tg4m@postgres:5432/chat
+    depends_on:
+      - postgres
+    command: [ "/app/server" ]
+
+volumes:
+  pgdata:
+    external: true

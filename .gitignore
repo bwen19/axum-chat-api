@@ -1,0 +1,7 @@
+target/
+deploy/
+.vscode/
+*.log
+app.env
+/.cargo
+
