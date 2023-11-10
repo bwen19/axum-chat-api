@@ -1,7 +1,9 @@
-target/
-deploy/
+.cargo/
+.sqlx/
 .vscode/
-*.log
+
+target/
 app.env
-/.cargo
+
+*.log
 

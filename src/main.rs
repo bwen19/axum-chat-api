@@ -1,13 +1,12 @@
+use server::{make_app, Config};
 use std::net::SocketAddr;
 use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-// ========================// Main //======================== //
-
 #[tokio::main]
 async fn main() {
     // Read environment variables from '.env'
-    dotenv::dotenv().expect("failed to read .env file");
+    dotenvy::dotenv().expect("failed to read .env file");
 
     // Initialize the logger
     tracing_subscriber::registry()
@@ -19,14 +18,14 @@ async fn main() {
         .init();
 
     // Parse our configuration from the environment
-    let config = server::Config::from_env();
+    let config = Config::from_env();
 
-    let addr: SocketAddr = format!("{}:{}", config.ip, config.port)
+    let addr: SocketAddr = config.server_addr
         .parse()
         .expect("Can not parse server address");
     tracing::info!("listening on {}", addr);
 
-    let app = server::app(config).await;
+    let app = make_app(config).await;
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

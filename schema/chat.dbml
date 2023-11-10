@@ -7,49 +7,38 @@ Table users as U {
     id bigserial [pk]
     username varchar [not null, unique]
     hashed_password varchar [not null]
+    avatar varchar [not null]
     nickname varchar [not null]
-    avatar varchar [not null, default: 'blank']
-    bio varchar [not null, default: 'blank']
-    role varchar [not null, default: 'user']
+    role varchar [not null]
+    room_id bigint [ref: > R.id, not null]
     deleted boolean [not null, default: false]
-    room_id bigint [not null]
     create_at timestamptz [not null, default: `now()`]
 }
 
-Table sessions as S {
-    id uuid [pk]
-    user_id bigint [not null]
-    refresh_token varchar [not null]
-    client_ip varchar [not null]
-    user_agent varchar [not null]
-    expire_at timestamptz [not null]
-    create_at timestamptz [not null, default: `now()`]
-}
-
-Table friendships as F {
-    user_id bigint
-    friend_id bigint
-    status varchar [not null, default: 'adding']
-    room_id bigint [not null]
+Table friends as F {
+    requester_id bigint [ref: > U.id]
+    addressee_id bigint [ref: > U.id]
+    room_id bigint [ref: > R.id, not null]
+    status varchar [not null]
     create_at timestamptz [not null, default: `now()`]
 
     indexes {
-        (user_id, friend_id) [pk]
+        (requester_id, addressee_id) [pk]
     }
 }
 
 Table rooms as R {
     id bigserial [pk]
     name varchar [not null]
-    cover varchar [not null, default: 'blank']
-    category varchar [not null, default: 'public']
+    cover varchar [not null]
+    category varchar [not null]
     create_at timestamptz [not null, default: `now()`]
 }
 
-Table room_members as Y {
-    room_id bigint
-    member_id bigint
-    rank varchar [not null, default: 'member']
+Table members as Y {
+    member_id bigint [ref: > U.id]
+    room_id bigint [ref: > R.id]
+    rank varchar [not null]
     join_at timestamptz [not null, default: `now()`]
 
     indexes {
@@ -59,24 +48,9 @@ Table room_members as Y {
 
 Table messages as M {
     id bigserial [pk]
-    room_id bigint [not null]
-    sender_id bigint [not null]
+    sender_id bigint [ref: > U.id, not null]
+    room_id bigint [ref: > R.id, not null]
     content varchar [not null]
-    kind varchar [not null, default: 'text']
+    kind varchar [not null]
     send_at timestamptz [not null, default: `now()`]
 }
-
-Table invitations {
-    code varchar [pk]
-    expire_at timestamptz [not null]
-}
-
-Ref: U.room_id > R.id [delete: cascade, update: no action]
-Ref: S.user_id > U.id [delete: cascade, update: no action]
-Ref: F.user_id > U.id [delete: cascade, update: no action]
-Ref: F.friend_id > U.id [delete: cascade, update: no action]
-Ref: F.room_id > R.id [delete: cascade, update: no action]
-Ref: Y.room_id > R.id [delete: cascade, update: no action]
-Ref: Y.member_id > U.id [delete: cascade, update: no action]
-Ref: M.room_id > R.id [delete: cascade, update: no action]
-Ref: M.sender_id > U.id [delete: cascade, update: no action]

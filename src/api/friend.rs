@@ -1,55 +1,174 @@
-use crate::db::model::{FriendInfo, RoomInfo};
-use serde::{Deserialize, Serialize};
+//! Handlers for friendships
+
+use super::{
+    event::ServerEvent, AcceptFriendRequest, AcceptFriendResponse, AddFriendRequest,
+    AddFriendResponse, AppState, DeleteFriendRequest, DeleteFriendResponse, RefuseFriendRequest,
+    RefuseFriendResponse,
+};
+use crate::{
+    conn::Client,
+    core::{constant::STATUS_DELETED, Error},
+};
+use std::sync::Arc;
 use validator::Validate;
 
 // ========================// Friend //======================== //
 
-// ---------------- Add friend ---------------- //
-#[derive(Deserialize, Validate)]
-pub struct AddFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
+pub async fn add_friend(
+    state: &Arc<AppState>,
+    client: &Client,
+    req: AddFriendRequest,
+) -> Result<(), Error> {
+    req.validate()?;
+
+    // check the friendship between users and adding friend
+    let friend = {
+        if let Some(friend) = state.db.get_friend(client.user_id(), req.friend_id).await? {
+            if friend.status == STATUS_DELETED {
+                state
+                    .db
+                    .update_friend(client.user_id(), req.friend_id)
+                    .await?
+            } else {
+                return Err(Error::NotInRoom);
+            }
+        } else {
+            state
+                .db
+                .create_friend(client.user_id(), req.friend_id)
+                .await?
+        }
+    };
+
+    let (requester, addressee) = state.db.get_friend_info(&friend).await?;
+
+    // send requester info to the friend client
+    let rsp = AddFriendResponse { friend: requester };
+    let msg = ServerEvent::AddFriend(rsp).to_msg()?;
+    state.hub.tell(req.friend_id, msg).await?;
+
+    // send addressee info to user client
+    let rsp = AddFriendResponse { friend: addressee };
+    let msg = ServerEvent::AddFriend(rsp).to_msg()?;
+    state.hub.broadcast(client.room_id(), msg).await?;
+
+    Ok(())
 }
 
-#[derive(Serialize)]
-pub struct AddFriendResponse {
-    pub friend: FriendInfo,
+pub async fn accept_friend(
+    state: &Arc<AppState>,
+    client: &Client,
+    req: AcceptFriendRequest,
+) -> Result<(), Error> {
+    req.validate()?;
+
+    let friend = state
+        .db
+        .get_friend(client.user_id(), req.friend_id)
+        .await?
+        .ok_or(Error::NotFound)?;
+
+    if friend.requester_id != req.friend_id {
+        return Err(Error::FriendStatus);
+    }
+
+    // update friend status and add friend to the private room
+    state.db.accept_friend(&friend).await?;
+
+    let (requester, addressee) = state.db.get_friend_info(&friend).await?;
+    let (room0, room1) = state.db.get_friend_room(&friend).await?;
+
+    // join friends in the hub room
+    let user_ids = vec![friend.requester_id, friend.addressee_id];
+    state.hub.add_members(friend.room_id, &user_ids).await?;
+
+    // send requester info to the user side
+    let rsp = AcceptFriendResponse {
+        friend: requester,
+        room: room0,
+    };
+    let msg = ServerEvent::AcceptFriend(rsp).to_msg()?;
+    state.hub.broadcast(client.room_id(), msg).await?;
+
+    // send the addressee info to friend client
+    let rsp = AcceptFriendResponse {
+        friend: addressee,
+        room: room1,
+    };
+    let msg = ServerEvent::AcceptFriend(rsp).to_msg()?;
+    state.hub.tell(req.friend_id, msg).await?;
+
+    Ok(())
 }
 
-// ---------------- Accept friend ---------------- //
-#[derive(Deserialize, Validate)]
-pub struct AcceptFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
+pub async fn refuse_friend(
+    state: &Arc<AppState>,
+    client: &Client,
+    req: RefuseFriendRequest,
+) -> Result<(), Error> {
+    req.validate()?;
+
+    let friend = state
+        .db
+        .get_friend(client.user_id(), req.friend_id)
+        .await?
+        .ok_or(Error::NotFound)?;
+
+    // check the friendship between users and adding friend
+    state.db.refuse_friend(&friend).await?;
+
+    // send user info to the other side
+    let rsp = RefuseFriendResponse {
+        friend_id: client.user_id(),
+    };
+    let msg = ServerEvent::RefuseFriend(rsp).to_msg()?;
+    state.hub.tell(req.friend_id, msg).await?;
+
+    // send the other's info to user client
+    let rsp = RefuseFriendResponse {
+        friend_id: req.friend_id,
+    };
+    let msg = ServerEvent::RefuseFriend(rsp).to_msg()?;
+    state.hub.broadcast(client.room_id(), msg).await?;
+
+    Ok(())
 }
 
-#[derive(Serialize)]
-pub struct AcceptFriendResponse {
-    pub friend: FriendInfo,
-    pub room: RoomInfo,
-}
+pub async fn delete_friend(
+    state: &Arc<AppState>,
+    client: &Client,
+    req: DeleteFriendRequest,
+) -> Result<(), Error> {
+    req.validate()?;
 
-// ---------------- Refuse friend ---------------- //
-#[derive(Deserialize, Validate)]
-pub struct RefuseFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
-}
+    let friend = state
+        .db
+        .get_friend(client.user_id(), req.friend_id)
+        .await?
+        .ok_or(Error::NotFound)?;
 
-#[derive(Serialize)]
-pub struct RefuseFriendResponse {
-    pub friend_id: i64,
-}
+    // update friend status and remove friend from the private room
+    state.db.delete_friend(&friend).await?;
 
-// ---------------- Delete friend ---------------- //
-#[derive(Deserialize, Validate)]
-pub struct DeleteFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
-}
+    // disconnect room hub and send leave info to client
+    let users = vec![friend.requester_id, friend.addressee_id];
+    state.hub.remove_members(friend.room_id, &users).await?;
 
-#[derive(Serialize)]
-pub struct DeleteFriendResponse {
-    pub friend_id: i64,
-    pub room_id: i64,
+    // send user info to the other side
+    let rsp = DeleteFriendResponse {
+        friend_id: client.user_id(),
+        room_id: friend.room_id,
+    };
+    let msg = ServerEvent::DeleteFriend(rsp).to_msg()?;
+    state.hub.tell(req.friend_id, msg).await?;
+
+    // send the other's info to user client
+    let rsp = DeleteFriendResponse {
+        friend_id: req.friend_id,
+        room_id: friend.room_id,
+    };
+    let msg = ServerEvent::DeleteFriend(rsp).to_msg()?;
+    state.hub.broadcast(client.room_id(), msg).await?;
+
+    Ok(())
 }

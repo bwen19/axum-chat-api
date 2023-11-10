@@ -1,61 +1,51 @@
 use std::env;
+use time::Duration;
 
-// ========================// Config //======================== //
-
-/// Configure of the App
 #[derive(Debug)]
 pub struct Config {
-    pub ip: String,
-    pub port: String,
-    pub db_url: String,
+    pub server_addr: String,
+    pub database_url: String,
+    pub redis_url: String,
     pub jwt_secret: String,
     pub public_directory: String,
-    pub access_token_duration: i64,
-    pub refresh_token_duration: i64,
-    pub user_channel_capacity: usize,
-    pub room_channel_capacity: usize,
+    pub token_duration: Duration,
+    pub session_duration: Duration,
+    pub session_seconds: usize,
 }
 
 impl Config {
-    /// Initialize the Config from env
     pub fn from_env() -> Config {
-        let ip = env::var("SERVER_IP").expect("failed to parse SERVER_IP");
-        let port = env::var("SERVER_PORT").expect("failed to parse SERVER_PORT");
-        let db_url = env::var("DATABASE_URL").expect("failed to parse DATABASE_URL");
-        let jwt_secret = env::var("JWT_SECRET").expect("failed to parse JWT_SECRET");
-        let public_directory =
-            env::var("PUBLIC_DIRECTORY").expect("failed to parse PUBLIC_DIRECTORY");
+        let server_addr = env::var("SERVER_ADDR").expect("SERVER_ADDR must be set");
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
+        let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+        let public_directory = env::var("PUBLIC_DIRECTORY").expect("PUBLIC_DIRECTORY must be set");
 
-        let access_token_duration: i64 = env::var("ACCESS_TOKEN_DURATION")
+        let token_duration: i64 = env::var("TOKEN_DURATION")
             .unwrap_or("15".to_owned())
             .parse()
-            .expect("failed to parse ACCESS_TOKEN_DURATION");
+            .expect("TOKEN_DURATION (minutes) must be set");
+        let token_duration = Duration::minutes(token_duration);
 
-        let refresh_token_duration: i64 = env::var("REFRESH_TOKEN_DURATION")
+        let session_duration: i64 = env::var("SESSION_DURATION")
             .unwrap_or("30".to_owned())
             .parse()
-            .expect("failed to parse REFRESH_TOKEN_DURATION");
-
-        let user_channel_capacity = env::var("USER_CHANNEL_CAPACITY")
-            .unwrap_or("100".to_owned())
-            .parse()
-            .expect("failed to parse USER_CHANNEL_CAPACITY");
-
-        let room_channel_capacity = env::var("ROOM_CHANNEL_CAPACITY")
-            .unwrap_or("100".to_owned())
-            .parse()
-            .expect("failed to parse ROOM_CHANNEL_CAPACITY");
+            .expect("SESSION_DURATION (days) must be set");
+        let session_duration = Duration::days(session_duration);
+        let session_seconds = session_duration
+            .whole_seconds()
+            .try_into()
+            .expect("Conversion error of session seconds");
 
         Config {
-            ip,
-            port,
-            db_url,
+            server_addr,
+            database_url,
+            redis_url,
             jwt_secret,
             public_directory,
-            access_token_duration,
-            refresh_token_duration,
-            user_channel_capacity,
-            room_channel_capacity,
+            token_duration,
+            session_duration,
+            session_seconds,
         }
     }
 }

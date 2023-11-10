@@ -1,9 +1,7 @@
 use super::{model::MessageInfo, Store};
-use crate::{
-    api::message::{NewMessageRequest, NewMessageResponse},
-    error::{AppResult, ResultExt},
-};
-use chrono::{DateTime, Utc};
+use crate::api::{NewMessageRequest, NewMessageResponse};
+use crate::core::Error;
+use time::OffsetDateTime;
 
 // ========================// Message Store //======================== //
 
@@ -13,7 +11,7 @@ impl Store {
         &self,
         sender_id: i64,
         arg: &NewMessageRequest,
-    ) -> AppResult<NewMessageResponse> {
+    ) -> Result<NewMessageResponse, Error> {
         let result = sqlx::query_as!(
             MessageInfoRow,
             r#"
@@ -33,8 +31,7 @@ impl Store {
             arg.kind,
         )
         .fetch_one(&self.pool)
-        .await
-        .exactly_one()?;
+        .await?;
 
         Ok(result.into())
     }
@@ -50,7 +47,7 @@ struct MessageInfoRow {
     sender_avatar: String,
     content: String,
     kind: String,
-    send_at: DateTime<Utc>,
+    send_at: OffsetDateTime,
 }
 
 impl From<MessageInfoRow> for NewMessageResponse {
@@ -59,7 +56,8 @@ impl From<MessageInfoRow> for NewMessageResponse {
             room_id: v.room_id,
             message: MessageInfo {
                 id: v.id,
-                sid: v.sender_id,
+                sender_id: v.sender_id,
+                room_id: v.room_id,
                 name: v.sender_name,
                 avatar: v.sender_avatar,
                 content: v.content,
