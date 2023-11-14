@@ -11,15 +11,10 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::{self, Duration};
 
-// ========================// WebSocket Router //======================== //
-
 pub fn router() -> Router<Arc<AppState>> {
     Router::new().route("/ws", get(ws_handler))
 }
 
-// ========================// Websocket Handler //======================== //
-
-/// Handler of the websocket router
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
@@ -64,18 +59,19 @@ async fn websocket(socket: WebSocket, state: Arc<AppState>, claims: Claims) {
                 match msg {
                     Message::Text(text) => {
                         if let Ok(event) = serde_json::from_str::<ClientEvent>(&text) {
-                            if event.process(&state, &client).await {
+                            tracing::debug!("processing {}", text);
+                            if event.process(&state, &client).await.is_err() {
                                 break;
                             }
                         } else {
                             tracing::debug!("Receive text message from client: {}", text);
                         }
-                        tracing::debug!("Receive close message from client");
                     }
                     Message::Close(_) => {
                         tracing::debug!("Receive close message from client");
                         break;
                     }
+                    Message::Pong(_) => {}
                     _ => {
                         tracing::debug!("Receive other message from client");
                     }

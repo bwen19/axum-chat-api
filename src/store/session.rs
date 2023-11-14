@@ -3,13 +3,11 @@ use crate::core::Error;
 use redis::AsyncCommands;
 use uuid::Uuid;
 
-// ========================// Session Store //======================== //
-
 impl Store {
-    pub async fn create_session(
+    pub async fn cache_session(
         &self,
         id: Uuid,
-        refresh_token: &String,
+        refresh_token: &str,
         seconds: usize,
     ) -> Result<(), Error> {
         let mut con = self.client.get_async_connection().await?;

@@ -45,17 +45,16 @@ pub fn validate_id_vec(ids: &Vec<i64>) -> Result<(), ValidationError> {
             return Err(e);
         }
     }
-
     Ok(())
 }
 
 /// Check whether str is one of the list
-fn validate_oneof(item: &str, list: &Vec<&str>) -> Result<(), ValidationError> {
-    if list.contains(&item) {
+fn validate_oneof(item: &str, items: &Vec<&str>) -> Result<(), ValidationError> {
+    if items.contains(&item) {
         Ok(())
     } else {
         let mut e = ValidationError::new("validate_oneof");
-        let msg = format!("must be one of {}", list.join(","));
+        let msg = format!("must be one of {}", items.join(","));
         e.message = Some(Cow::from(msg));
         Err(e)
     }

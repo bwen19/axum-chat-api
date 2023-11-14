@@ -63,8 +63,6 @@ pub struct UpdateUserRequest {
     pub nickname: Option<String>,
     #[validate(length(min = 1, max = 200, message = "must be between 1 and 200 characters"))]
     pub avatar: Option<String>,
-    #[validate(length(min = 1, max = 200, message = "must be between 1 and 200 characters"))]
-    pub bio: Option<String>,
     #[validate(custom = "VAL::validate_user_role")]
     pub role: Option<String>,
     pub deleted: Option<bool>,
@@ -107,54 +105,6 @@ pub struct FindUserResponse {
     pub user: Option<UserInfo>,
 }
 
-// ============================== // Friend // ============================== //
-
-#[derive(Deserialize, Validate)]
-pub struct AddFriendRequest {
-    #[validate(range(min = 1, message = "Invalid user id"))]
-    pub friend_id: i64,
-}
-
-#[derive(Serialize)]
-pub struct AddFriendResponse {
-    pub friend: FriendInfo,
-}
-
-#[derive(Deserialize, Validate)]
-pub struct AcceptFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
-}
-
-#[derive(Serialize)]
-pub struct AcceptFriendResponse {
-    pub friend: FriendInfo,
-    pub room: RoomInfo,
-}
-
-#[derive(Deserialize, Validate)]
-pub struct RefuseFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
-}
-
-#[derive(Serialize)]
-pub struct RefuseFriendResponse {
-    pub friend_id: i64,
-}
-
-#[derive(Deserialize, Validate)]
-pub struct DeleteFriendRequest {
-    #[validate(range(min = 1, message = "Invalid friend id"))]
-    pub friend_id: i64,
-}
-
-#[derive(Serialize)]
-pub struct DeleteFriendResponse {
-    pub friend_id: i64,
-    pub room_id: i64,
-}
-
 // ============================== // Message // ============================== //
 
 /// Used to get initial rooms and friends
@@ -182,7 +132,6 @@ pub struct NewMessageRequest {
 
 #[derive(Serialize)]
 pub struct NewMessageResponse {
-    pub room_id: i64,
     pub message: MessageInfo,
 }
 
@@ -198,10 +147,10 @@ pub struct NewRoomRequest {
     #[validate(length(min = 2, max = 50, message = "must be between 2 and 50 characters"))]
     pub name: String,
     #[validate(
-        length(min = 3, message = "must have at least 3 members"),
+        length(min = 2, message = "must have at least 2 members"),
         custom = "VAL::validate_id_vec"
     )]
-    pub member_ids: Vec<i64>,
+    pub members_id: Vec<i64>,
 }
 
 #[derive(Serialize)]
@@ -250,7 +199,7 @@ pub struct AddMembersRequest {
         length(min = 1, message = "must have at least 1 members"),
         custom = "VAL::validate_id_vec"
     )]
-    pub member_ids: Vec<i64>,
+    pub members_id: Vec<i64>,
 }
 
 #[derive(Serialize)]
@@ -267,11 +216,59 @@ pub struct DeleteMembersRequest {
         length(min = 1, message = "must have at least 1 members"),
         custom = "VAL::validate_id_vec"
     )]
-    pub member_ids: Vec<i64>,
+    pub members_id: Vec<i64>,
 }
 
 #[derive(Serialize)]
 pub struct DeleteMembersResponse {
     pub room_id: i64,
-    pub member_ids: Vec<i64>,
+    pub members_id: Vec<i64>,
+}
+
+// ============================== // Friend // ============================== //
+
+#[derive(Deserialize, Validate)]
+pub struct AddFriendRequest {
+    #[validate(range(min = 1, message = "Invalid user id"))]
+    pub friend_id: i64,
+}
+
+#[derive(Serialize)]
+pub struct AddFriendResponse {
+    pub friend: FriendInfo,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct AcceptFriendRequest {
+    #[validate(range(min = 1, message = "Invalid friend id"))]
+    pub friend_id: i64,
+}
+
+#[derive(Serialize)]
+pub struct AcceptFriendResponse {
+    pub friend: FriendInfo,
+    pub room: RoomInfo,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct RefuseFriendRequest {
+    #[validate(range(min = 1, message = "Invalid friend id"))]
+    pub friend_id: i64,
+}
+
+#[derive(Serialize)]
+pub struct RefuseFriendResponse {
+    pub friend_id: i64,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct DeleteFriendRequest {
+    #[validate(range(min = 1, message = "Invalid friend id"))]
+    pub friend_id: i64,
+}
+
+#[derive(Serialize)]
+pub struct DeleteFriendResponse {
+    pub friend_id: i64,
+    pub room_id: i64,
 }

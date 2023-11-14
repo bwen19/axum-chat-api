@@ -29,9 +29,9 @@ where
     type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Query(value) = Query::<T>::from_request_parts(parts, state).await?;
-        value.validate()?;
-        Ok(ValidQuery(value))
+        let Query(data) = Query::<T>::from_request_parts(parts, state).await?;
+        data.validate()?;
+        Ok(ValidQuery(data))
     }
 }
 
@@ -51,9 +51,9 @@ where
     type Rejection = Error;
 
     async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
-        let Json(value) = Json::<T>::from_request(req, state).await?;
-        value.validate()?;
-        Ok(ValidJson(value))
+        let Json(data) = Json::<T>::from_request(req, state).await?;
+        data.validate()?;
+        Ok(ValidJson(data))
     }
 }
 

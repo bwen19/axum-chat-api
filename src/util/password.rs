@@ -9,23 +9,22 @@ pub fn hash_password(password: &str) -> Result<String, Error> {
 
     let hashed_password = Argon2::default()
         .hash_password(password.as_bytes(), &salt)
-        .map_err(|_| Error::Internal("failed to hash password".to_string()))?
+        .map_err(|_| Error::Argon2)?
         .to_string();
     Ok(hashed_password)
 }
 
 pub fn verify_password(password: &str, hashed_password: &str) -> Result<(), Error> {
-    let hashed_password = PasswordHash::new(hashed_password)
-        .map_err(|_| Error::Internal("invalid hash password".to_string()))?;
+    let hashed_password = PasswordHash::new(hashed_password).map_err(|_| Error::Argon2)?;
     Argon2::default()
         .verify_password(password.as_bytes(), &hashed_password)
         .map_err(|e| match e {
-            password_hash::Error::Password => Error::WrongPassword,
-            _ => Error::Internal("failed to verify password".to_string()),
+            password_hash::Error::Password => Error::InvalidPassword,
+            _ => Error::Argon2,
         })
 }
 
-// ========================// tests //======================== //
+// ============================== // tests // ============================== //
 
 #[cfg(test)]
 mod tests {
@@ -38,6 +37,12 @@ mod tests {
         let hashed_password = hash_password(&password).unwrap();
 
         assert!(verify_password(&password, &hashed_password).is_ok());
-        assert!(verify_password("wrong", &hashed_password).is_err());
+
+        let res = verify_password("wrong", &hashed_password);
+        assert!(res.is_err());
+        assert_eq!(
+            res.err().unwrap().to_string(),
+            Error::InvalidPassword.to_string()
+        );
     }
 }

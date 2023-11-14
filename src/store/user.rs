@@ -8,6 +8,7 @@ use crate::{
     core::{Error, ResultExt},
     util::password::{hash_password, verify_password},
 };
+use redis::AsyncCommands;
 use time::OffsetDateTime;
 
 impl Store {
@@ -74,8 +75,28 @@ impl Store {
         Ok(user)
     }
 
+    pub async fn cache_user(&self, user: &UserInfo) -> Result<(), Error> {
+        let user_str = serde_json::to_string(&user)?;
+        let mut con = self.client.get_async_connection().await?;
+        let key = format!("user:{}", user.id);
+        con.set_ex(key, user_str, 86400).await?;
+        Ok(())
+    }
+
+    pub async fn get_cache_user(&self, user_id: i64) -> Result<UserInfo, Error> {
+        let mut con = self.client.get_async_connection().await?;
+        let key = format!("user:{}", user_id);
+        let user_str: String = con.get(key).await?;
+        let user = serde_json::from_str::<UserInfo>(&user_str)?;
+        Ok(user)
+    }
+
     pub async fn get_user(&self, user_id: i64) -> Result<UserInfo, Error> {
-        sqlx::query_as!(
+        if let Ok(user) = self.get_cache_user(user_id).await {
+            return Ok(user);
+        }
+
+        let user = sqlx::query_as!(
             UserInfo,
             r#"
                 SELECT
@@ -87,10 +108,13 @@ impl Store {
         )
         .fetch_one(&self.pool)
         .await
-        .not_found()
+        .not_found()?;
+
+        self.cache_user(&user).await?;
+        Ok(user)
     }
 
-    pub async fn find_user(&self, username: &String) -> Result<Option<User>, Error> {
+    pub async fn find_user(&self, username: &str) -> Result<Option<User>, Error> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -173,7 +197,7 @@ impl Store {
         .on_constraint("users_username_key")
     }
 
-    pub async fn change_avatar(&self, user_id: i64, avatar: &String) -> Result<String, Error> {
+    pub async fn change_avatar(&self, user_id: i64, avatar: &str) -> Result<String, Error> {
         let old_avatar = sqlx::query_scalar!(
             r#"
                 UPDATE users AS x
@@ -210,8 +234,8 @@ impl Store {
         .not_found()?;
 
         verify_password(&req.old_password, &hashed_password)?;
-
         let hashed_password = hash_password(&req.new_password)?;
+
         sqlx::query!(
             r#"
                 UPDATE users
@@ -261,20 +285,6 @@ impl Store {
 
         rooms.append(&mut friend_rooms);
 
-        // delete messages
-        sqlx::query!(
-            r#"
-                DELETE FROM messages
-                WHERE
-                    sender_id = $1
-                    OR room_id = ANY($2::bigint[])
-            "#,
-            user_id,
-            &rooms,
-        )
-        .execute(&mut *transaction)
-        .await?;
-
         // delete members
         sqlx::query!(
             r#"
@@ -299,7 +309,8 @@ impl Store {
             user_id,
         )
         .fetch_one(&mut *transaction)
-        .await?;
+        .await
+        .not_found()?;
 
         rooms.push(personal_room);
 

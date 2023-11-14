@@ -2,8 +2,9 @@
 
 use super::extractor::{CookieGuard, ValidJson};
 use super::{AppState, AutoLoginRequest, LoginRequest, LoginResponse, RenewTokenResponse};
+use crate::core::constant::{COOKIE_NAME, ROLE_ADMIN};
 use crate::{
-    core::{constant::COOKIE_NAME, Error},
+    core::Error,
     util::{password::verify_password, token::Claims},
 };
 use axum::{extract::State, routing::post, Json, Router};
@@ -23,18 +24,19 @@ async fn login(
     cookie_jar: CookieJar,
     ValidJson(req): ValidJson<LoginRequest>,
 ) -> Result<(CookieJar, Json<LoginResponse>), Error> {
-    // Get user by name
+    // get user by name
     let user = state
         .db
         .find_user(&req.username)
         .await?
-        .ok_or(Error::UserNotExist)?;
+        .ok_or(Error::NotFound)?;
 
-    // Check user status
+    // verify user status
     if user.deleted {
         return Err(Error::Forbidden);
-    } else if let Some(is_admin) = req.is_admin {
-        if is_admin && user.role != "admin" {
+    }
+    if let Some(is_admin) = req.is_admin {
+        if is_admin && user.role != ROLE_ADMIN {
             return Err(Error::Forbidden);
         }
     }
@@ -42,18 +44,18 @@ async fn login(
     // check password
     verify_password(&req.password, &user.hashed_password)?;
 
-    // Create access token with duration in minutes
+    // create access token with token_duration
     let access_claims = Claims::from_user(&user, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
-    // Create refresh token with duration in days
+    // create refresh token with session_duration
     let refresh_claims = Claims::from_user(&user, state.config.session_duration);
     let refresh_token = state.jwt.create(&refresh_claims)?;
 
-    // Create session to save refresh token
+    // create session to save refresh token in redis
     state
         .db
-        .create_session(
+        .cache_session(
             refresh_claims.id,
             &refresh_token,
             state.config.session_seconds,
@@ -67,17 +69,15 @@ async fn login(
         .secure(true)
         .http_only(true)
         .finish();
-
     cookie.set_expires(refresh_claims.exp);
 
-    // Return cookie and response
-    let cookie_jar = cookie_jar.add(cookie);
-    let rsp = Json(LoginResponse {
-        user: user.into(),
-        access_token,
-    });
+    let user = user.into();
+    state.db.cache_user(&user).await?;
 
-    Ok((cookie_jar, rsp))
+    // return cookie and response
+    let cookie_jar = cookie_jar.add(cookie);
+    let rsp = LoginResponse { user, access_token };
+    Ok((cookie_jar, Json(rsp)))
 }
 
 async fn auto_login(
@@ -85,20 +85,25 @@ async fn auto_login(
     CookieGuard(claims): CookieGuard,
     Json(req): Json<AutoLoginRequest>,
 ) -> Result<Json<LoginResponse>, Error> {
-    // Get user info
+    // get user info
     let user = state.db.get_user(claims.user_id).await?;
 
+    // verify user status
+    if user.deleted {
+        return Err(Error::Forbidden);
+    }
     if let Some(is_admin) = req.is_admin {
-        if is_admin && user.role != "admin" {
+        if is_admin && user.role != ROLE_ADMIN {
             return Err(Error::Forbidden);
         }
     }
 
-    // Create new access token
+    // create new access token
     let access_claims = Claims::from_claims(claims, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
-    Ok(Json(LoginResponse { user, access_token }))
+    let rsp = LoginResponse { user, access_token };
+    Ok(Json(rsp))
 }
 
 async fn renew_token(
@@ -109,7 +114,8 @@ async fn renew_token(
     let access_claims = Claims::from_claims(claims, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
-    Ok(Json(RenewTokenResponse { access_token }))
+    let rsp = RenewTokenResponse { access_token };
+    Ok(Json(rsp))
 }
 
 async fn logout(

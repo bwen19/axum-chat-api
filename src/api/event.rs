@@ -60,7 +60,7 @@ pub enum ClientEvent {
 }
 
 impl ClientEvent {
-    pub async fn process(self, state: &Arc<AppState>, client: &Client) -> bool {
+    pub async fn process(self, state: &Arc<AppState>, client: &Client) -> Result<(), Error> {
         let result = match self {
             ClientEvent::Initialize(req) => message::initialize(state, client, req).await,
             ClientEvent::NewMessage(req) => message::send_message(state, client, req).await,
@@ -79,20 +79,15 @@ impl ClientEvent {
         // send text message of WsError to the user's client
         if let Err(err) = result {
             match err {
-                Error::SendMessage => false,
-                Error::SerializeMessage => false,
+                Error::SendMessage => return Err(err),
                 _ => {
                     let (_, msg) = err.into_error();
-                    if let Ok(msg) = ServerEvent::ErrMessage(msg).to_msg() {
-                        client.send(msg).await
-                    } else {
-                        false
-                    }
+                    let msg = ServerEvent::ErrMessage(msg).to_msg()?;
+                    client.send(msg).await?;
                 }
             }
-        } else {
-            true
         }
+        Ok(())
     }
 }
 
@@ -105,7 +100,7 @@ pub enum ServerEvent {
     ErrMessage(String),
 
     #[serde(rename = "initialize")]
-    Initialized(InitializeResponse),
+    Initialize(InitializeResponse),
 
     #[serde(rename = "new-message")]
     NewMessage(NewMessageResponse),
@@ -142,8 +137,7 @@ pub enum ServerEvent {
 
 impl ServerEvent {
     pub fn to_msg(&self) -> Result<Message, Error> {
-        serde_json::to_string(self)
-            .map(|data| Message::Text(data))
-            .map_err(|_| Error::SerializeMessage)
+        let msg = serde_json::to_string(self)?;
+        Ok(Message::Text(msg))
     }
 }

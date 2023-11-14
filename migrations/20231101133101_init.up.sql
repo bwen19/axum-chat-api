@@ -1,6 +1,6 @@
 -- SQL dump generated using DBML (dbml-lang.org)
 -- Database: PostgreSQL
--- Generated at: 2023-11-10T02:21:07.789Z
+-- Generated at: 2023-11-13T08:33:46.241Z
 
 CREATE TABLE "users" (
   "id" bigserial PRIMARY KEY,
@@ -39,15 +39,6 @@ CREATE TABLE "members" (
   PRIMARY KEY ("room_id", "member_id")
 );
 
-CREATE TABLE "messages" (
-  "id" bigserial PRIMARY KEY,
-  "sender_id" bigint NOT NULL,
-  "room_id" bigint NOT NULL,
-  "content" varchar NOT NULL,
-  "kind" varchar NOT NULL,
-  "send_at" timestamptz NOT NULL DEFAULT (now())
-);
-
 ALTER TABLE "users" ADD FOREIGN KEY ("room_id") REFERENCES "rooms" ("id");
 
 ALTER TABLE "friends" ADD FOREIGN KEY ("requester_id") REFERENCES "users" ("id");
@@ -59,7 +50,3 @@ ALTER TABLE "friends" ADD FOREIGN KEY ("room_id") REFERENCES "rooms" ("id");
 ALTER TABLE "members" ADD FOREIGN KEY ("member_id") REFERENCES "users" ("id");
 
 ALTER TABLE "members" ADD FOREIGN KEY ("room_id") REFERENCES "rooms" ("id");
-
-ALTER TABLE "messages" ADD FOREIGN KEY ("sender_id") REFERENCES "users" ("id");
-
-ALTER TABLE "messages" ADD FOREIGN KEY ("room_id") REFERENCES "rooms" ("id");

@@ -45,12 +45,3 @@ Table members as Y {
         (room_id, member_id) [pk]
     }
 }
-
-Table messages as M {
-    id bigserial [pk]
-    sender_id bigint [ref: > U.id, not null]
-    room_id bigint [ref: > R.id, not null]
-    content varchar [not null]
-    kind varchar [not null]
-    send_at timestamptz [not null, default: `now()`]
-}

@@ -12,8 +12,6 @@ use crate::{
 use std::sync::Arc;
 use validator::Validate;
 
-// ========================// Friend //======================== //
-
 pub async fn add_friend(
     state: &Arc<AppState>,
     client: &Client,
@@ -30,7 +28,7 @@ pub async fn add_friend(
                     .update_friend(client.user_id(), req.friend_id)
                     .await?
             } else {
-                return Err(Error::NotInRoom);
+                return Err(Error::FriendStatus);
             }
         } else {
             state

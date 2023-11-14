@@ -1,12 +1,9 @@
 use super::client::Client;
 use super::room::{ChatRoom, RoomAction};
-use crate::core::constant::CHAN_CAPACITY;
-use crate::core::Error;
+use crate::core::{constant::CHAN_CAPACITY, Error};
 use axum::extract::ws::Message;
-// use std::collections::hash_map::Entry;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -24,10 +21,9 @@ impl HubState {
         Ok(())
     }
 
-    pub async fn insert_client(&mut self, client: &Client, rooms: Vec<i64>) -> Result<(), Error> {
-        for &room_id in rooms.iter() {
-            let tx = self.get_room_chan(room_id);
-
+    pub async fn register_client(&mut self, client: &Client, rooms: Vec<i64>) -> Result<(), Error> {
+        for room_id in &rooms {
+            let tx = self.get_room_chan(*room_id);
             tx.send(RoomAction::Join(client.clone())).await?;
         }
 
@@ -44,9 +40,9 @@ impl HubState {
         Ok(())
     }
 
-    pub async fn remove_client(&mut self, client: &Client) -> Result<(), Error> {
+    pub async fn unregister_client(&mut self, client: &Client) -> Result<(), Error> {
         if let Some(us) = self.users.get_mut(&client.user_id()) {
-            for room_id in us.rooms.iter() {
+            for room_id in &us.rooms {
                 if let Some(room) = self.rooms.get(room_id) {
                     room.tx
                         .send(RoomAction::Left(client.user_id(), client.id()))
@@ -65,7 +61,7 @@ impl HubState {
     pub async fn add_members(&mut self, room_id: i64, users: &Vec<i64>) -> Result<(), Error> {
         let tx = self.get_room_chan(room_id);
 
-        for user_id in users.iter() {
+        for user_id in users {
             if let Some(us) = self.users.get_mut(user_id) {
                 tx.send(RoomAction::Add(*user_id, us.txs.clone())).await?;
                 us.rooms.insert(room_id);
@@ -75,13 +71,26 @@ impl HubState {
     }
 
     pub async fn remove_members(&mut self, room_id: i64, users: &Vec<i64>) -> Result<(), Error> {
-        let tx = self.get_room_chan(room_id);
-
-        for user_id in users.iter() {
-            if let Some(us) = self.users.get_mut(user_id) {
-                tx.send(RoomAction::Del(*user_id)).await?;
-                us.rooms.remove(&room_id);
+        if let Some(rs) = self.rooms.get(&room_id) {
+            for user_id in users {
+                if let Some(us) = self.users.get_mut(user_id) {
+                    rs.tx.send(RoomAction::Del(*user_id)).await?;
+                    us.rooms.remove(&room_id);
+                }
             }
+        }
+        Ok(())
+    }
+
+    pub async fn delete_room(&mut self, room_id: i64, users: &Vec<i64>) -> Result<(), Error> {
+        if let Some(rs) = self.rooms.get(&room_id) {
+            for user_id in users {
+                if let Some(us) = self.users.get_mut(user_id) {
+                    us.rooms.remove(&room_id);
+                }
+            }
+            rs.task.abort();
+            self.rooms.remove(&room_id);
         }
         Ok(())
     }
@@ -107,9 +116,9 @@ impl HubState {
 
     fn create_room(&mut self, room_id: i64) -> mpsc::Sender<RoomAction> {
         let (tx, rx) = mpsc::channel(CHAN_CAPACITY);
-        let mut chat_room = ChatRoom::new(rx);
 
         let task = tokio::spawn(async move {
+            let mut chat_room = ChatRoom::new(rx);
             chat_room.serve().await;
         });
 
@@ -141,7 +150,6 @@ impl UserState {
     }
 }
 
-#[allow(dead_code)]
 struct RoomState {
     tx: mpsc::Sender<RoomAction>,
     task: JoinHandle<()>,

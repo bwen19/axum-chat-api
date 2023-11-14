@@ -1,11 +1,15 @@
 //! Handlers for room members
 
-use super::{event::ServerEvent, AddMembersRequest, AppState, DeleteMembersRequest};
-use crate::{conn::Client, core::Error};
+use super::{
+    event::ServerEvent, AddMembersRequest, AddMembersResponse, AppState, DeleteMembersRequest,
+    DeleteMembersResponse, NewRoomResponse,
+};
+use crate::{
+    conn::Client,
+    core::{constant::RANK_MEMBER, Error},
+};
 use std::sync::Arc;
 use validator::Validate;
-
-// ========================// Room Members //======================== //
 
 pub async fn add_members(
     state: &Arc<AppState>,
@@ -14,29 +18,28 @@ pub async fn add_members(
 ) -> Result<(), Error> {
     req.validate()?;
 
-    // check if room exist and user has permission (manager)
-    if !state
-        .db
-        .check_rank(client.user_id(), req.room_id, "manager")
-        .await?
-    {
+    // check if room exist and user has permission
+    let room_id = req.room_id;
+    let rank = state.db.get_rank(client.user_id(), room_id).await?;
+    if rank == RANK_MEMBER {
         return Err(Error::Forbidden);
     }
 
     // insert members into database
-    let rsp1 = state.db.add_members(&req).await?;
-    let rsp2 = state.db.get_room(req.room_id).await?;
-    let user_ids = rsp1.members.iter().map(|x| x.id).collect();
+    let members = state.db.add_members(&req).await?;
+    let users_id = members.iter().map(|x| x.id).collect();
 
     // notice room members
-    let msg = ServerEvent::AddMembers(rsp1).to_msg()?;
-    state.hub.broadcast(req.room_id, msg).await?;
+    let rsp = AddMembersResponse { room_id, members };
+    let msg = ServerEvent::AddMembers(rsp).to_msg()?;
+    state.hub.broadcast(room_id, msg).await?;
+    state.hub.add_members(room_id, &users_id).await?;
 
     // notice the new members
-    state.hub.add_members(req.room_id, &user_ids).await?;
-
-    let msg = ServerEvent::NewRoom(rsp2).to_msg()?;
-    state.hub.notify(&user_ids, msg).await?;
+    let room = state.db.get_room(room_id).await?;
+    let rsp = NewRoomResponse { room };
+    let msg = ServerEvent::NewRoom(rsp).to_msg()?;
+    state.hub.notify(&users_id, msg).await?;
 
     Ok(())
 }
@@ -49,28 +52,30 @@ pub async fn delete_members(
     req.validate()?;
 
     // check if room exist and user has permission (manager)
-    if !state
-        .db
-        .check_rank(client.user_id(), req.room_id, "manager")
-        .await?
-    {
+    let room_id = req.room_id;
+    let rank = state.db.get_rank(client.user_id(), room_id).await?;
+    if rank == RANK_MEMBER {
         return Err(Error::Forbidden);
     }
 
     // check if user is in the list
-    if req.member_ids.contains(&client.user_id()) {
-        return Err(Error::NotInRoom);
+    if req.members_id.contains(&client.user_id()) {
+        return Err(Error::Forbidden);
     }
 
     // delete members from database
-    let rsp = state.db.delete_members(&req).await?;
+    let members_id = state.db.delete_members(&req).await?;
 
     // remove connection in the hub
-    state.hub.remove_members(req.room_id, &req.member_ids).await?;
+    state.hub.remove_members(room_id, &members_id).await?;
 
     // notice other room members
+    let rsp = DeleteMembersResponse {
+        room_id,
+        members_id,
+    };
     let msg = ServerEvent::DeleteMembers(rsp).to_msg()?;
-    state.hub.broadcast(req.room_id, msg).await?;
+    state.hub.broadcast(room_id, msg).await?;
 
     Ok(())
 }

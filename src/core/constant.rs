@@ -1,5 +1,6 @@
 pub const COOKIE_NAME: &str = "jwt";
 pub const CHAN_CAPACITY: usize = 100;
+pub const IMAGE_KEY: &str = "image";
 
 pub const PERSONAL_ROOM_NAME: &str = "My Device";
 pub const PERSONAL_ROOM_COVER: &str = "/cover/personal";

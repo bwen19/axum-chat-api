@@ -34,7 +34,6 @@ impl AppState {
             jwt: JwtToken::new(&config),
             config,
         };
-
         Arc::new(state)
     }
 }

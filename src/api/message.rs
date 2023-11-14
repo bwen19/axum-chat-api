@@ -3,7 +3,8 @@
 use super::{
     event::ServerEvent,
     extractor::AuthGuard,
-    AppState, {InitializeRequest, InitializeResponse, NewMessageRequest, SendFileResponse},
+    AppState, NewMessageResponse,
+    {InitializeRequest, InitializeResponse, NewMessageRequest, SendFileResponse},
 };
 use crate::{conn::Client, core::Error, util};
 use axum::{
@@ -23,9 +24,6 @@ use tokio_util::io::StreamReader;
 use tower_http::limit::RequestBodyLimitLayer;
 use validator::Validate;
 
-// ========================// Message Router //======================== //
-
-/// Create user router
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/message/file", post(send_file))
@@ -44,7 +42,7 @@ async fn send_file(
         let file_name = if let Some(file_name) = field.file_name() {
             file_name.to_owned()
         } else {
-            return Err(Error::InvalidFile);
+            return Err(Error::BadRequest);
         };
 
         let file_url = util::common::generate_file_name(&file_name);
@@ -59,10 +57,10 @@ async fn send_file(
 
         file_url
     } else {
-        return Err(Error::InvalidFile);
+        return Err(Error::BadRequest);
     };
-
-    Ok(Json(SendFileResponse { file_url }))
+    let rsp = SendFileResponse { file_url };
+    Ok(Json(rsp))
 }
 
 // Save a `Stream` to a file
@@ -83,8 +81,8 @@ where
 
         Ok::<_, io::Error>(())
     }
-    .await
-    .map_err(|_| Error::CustomIo)
+    .await?;
+    Ok(())
 }
 
 pub async fn initialize(
@@ -107,8 +105,8 @@ pub async fn initialize(
 
     // send rooms and friends info to the client socket
     let rsp = InitializeResponse { rooms, friends };
-    let msg = ServerEvent::Initialized(rsp).to_msg()?;
-    client.send(msg).await;
+    let msg = ServerEvent::Initialize(rsp).to_msg()?;
+    client.send(msg).await?;
 
     Ok(())
 }
@@ -122,15 +120,16 @@ pub async fn send_message(
 
     // check whether user is in the room
     if !state.hub.is_user_in(client.user_id(), req.room_id).await {
-        return Err(Error::NotInRoom);
+        return Err(Error::Forbidden);
     }
 
     // create message and store in database
-    let data = state.db.create_message(client.user_id(), &req).await?;
+    let message = state.db.cache_message(client.user_id(), req).await?;
+    let room_id = message.room_id;
 
     // send message to the room
-    let room_id = data.room_id;
-    let msg = ServerEvent::NewMessage(data).to_msg()?;
+    let rsp = NewMessageResponse { message };
+    let msg = ServerEvent::NewMessage(rsp).to_msg()?;
     state.hub.broadcast(room_id, msg).await?;
 
     Ok(())

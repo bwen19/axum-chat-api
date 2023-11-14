@@ -1,3 +1,5 @@
+//! Custom error types
+
 use axum::{
     extract::rejection::{JsonRejection, QueryRejection, TypedHeaderRejection},
     http::StatusCode,
@@ -16,64 +18,68 @@ pub enum Error {
     // 400 Bad Request
     #[error(transparent)]
     Validation(#[from] validator::ValidationErrors),
-    #[error("The user doesn't exist")]
-    UserNotExist,
+
     #[error("The password doesn't match")]
-    WrongPassword,
-    #[error("Duplicate value on {0}")]
+    InvalidPassword,
+
+    #[error("Already exist on {0}")]
     UniqueConstraint(String),
+
     #[error("The friend status is invalid")]
     FriendStatus,
-    #[error("Cannot delete yourself")]
-    DeleteUserSelf,
-    #[error("The uploaded file is invalid")]
-    InvalidFile,
+
+    #[error("Bad request")]
+    BadRequest,
 
     // 401 Unauthorized
     #[error("Authentication required")]
     Unauthorized,
 
     // 403 Forbidden
-    #[error("You don't have permission to access")]
+    #[error("Permission denied")]
     Forbidden,
 
     // 404 NotFound
-    #[error("Resource not found")]
+    #[error("Not exists")]
     NotFound,
 
     // 422 UnprocessableEntity
     #[error(transparent)]
     QueryRejection(#[from] QueryRejection),
+
     #[error(transparent)]
     JsonRejection(#[from] JsonRejection),
+
     #[error(transparent)]
     TypedHeaderRejection(#[from] TypedHeaderRejection),
 
     // 500 Internal Server Error
+    #[error("Argon2 internal error")]
+    Argon2,
+
     #[error("Database error while collecting results")]
     Database,
+
     #[error(transparent)]
     Infallible(#[from] Infallible),
+
     #[error(transparent)]
     Redis(#[from] redis::RedisError),
+
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-    #[error("{0}")]
-    Internal(String),
-    #[error("Failed to read or write file")]
-    CustomIo,
+
     #[error(transparent)]
     JwtToken(#[from] jsonwebtoken::errors::Error),
 
-    // Websocket Error
-    #[error("You are not in this room")]
-    NotInRoom,
+    #[error(transparent)]
+    Serde(#[from] serde_json::error::Error),
+
     #[error("Failed to send websocket message")]
     SendMessage,
-    #[error("Failed to serialize websocket message")]
-    SerializeMessage,
 }
 
 // Convert broadcast send error to Error
@@ -96,23 +102,21 @@ impl Error {
             // 203
             Error::ExpiredToken => StatusCode::NON_AUTHORITATIVE_INFORMATION,
             // 400
-            Error::Validation(_) => StatusCode::BAD_REQUEST,
-            Error::UserNotExist => StatusCode::BAD_REQUEST,
-            Error::WrongPassword => StatusCode::BAD_REQUEST,
-            Error::UniqueConstraint(_) => StatusCode::BAD_REQUEST,
-            Error::DeleteUserSelf => StatusCode::BAD_REQUEST,
-            Error::InvalidFile => StatusCode::BAD_REQUEST,
+            Error::Validation(_)
+            | Error::InvalidPassword
+            | Error::UniqueConstraint(_)
+            | Error::FriendStatus
+            | Error::BadRequest => StatusCode::BAD_REQUEST,
             // 401
             Error::Unauthorized => StatusCode::UNAUTHORIZED,
             // 403
             Error::Forbidden => StatusCode::FORBIDDEN,
-            Error::NotInRoom => StatusCode::FORBIDDEN,
             // 404
             Error::NotFound => StatusCode::NOT_FOUND,
             // 422
-            Error::QueryRejection(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            Error::JsonRejection(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            Error::TypedHeaderRejection(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Error::QueryRejection(_) | Error::JsonRejection(_) | Error::TypedHeaderRejection(_) => {
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
             _ => {
                 tracing::error!("{}", self.to_string());
                 return (
