@@ -1,4 +1,4 @@
-//! Handlers for friendships
+//! Handlers for friendship
 
 use super::{
     event::ServerEvent, AcceptFriendRequest, AcceptFriendResponse, AddFriendRequest,
@@ -19,7 +19,7 @@ pub async fn add_friend(
 ) -> Result<(), Error> {
     req.validate()?;
 
-    // check the friendship between users and adding friend
+    // get friendship and create one if not exists
     let friend = {
         if let Some(friend) = state.db.get_friend(client.user_id(), req.friend_id).await? {
             if friend.status == STATUS_DELETED {
@@ -66,7 +66,8 @@ pub async fn accept_friend(
         .await?
         .ok_or(Error::NotFound)?;
 
-    if friend.requester_id != req.friend_id {
+    // only addressee can accept the friendship
+    if friend.addressee_id != client.user_id() {
         return Err(Error::FriendStatus);
     }
 
@@ -112,17 +113,17 @@ pub async fn refuse_friend(
         .await?
         .ok_or(Error::NotFound)?;
 
-    // check the friendship between users and adding friend
+    // update friend status in database
     state.db.refuse_friend(&friend).await?;
 
-    // send user info to the other side
+    // send user's info to the friend side
     let rsp = RefuseFriendResponse {
         friend_id: client.user_id(),
     };
     let msg = ServerEvent::RefuseFriend(rsp).to_msg()?;
     state.hub.tell(req.friend_id, msg).await?;
 
-    // send the other's info to user client
+    // send the friend's info to user client
     let rsp = RefuseFriendResponse {
         friend_id: req.friend_id,
     };
@@ -145,14 +146,14 @@ pub async fn delete_friend(
         .await?
         .ok_or(Error::NotFound)?;
 
-    // update friend status and remove friend from the private room
+    // update friend status and remove users from the private chat room
     state.db.delete_friend(&friend).await?;
 
-    // disconnect room hub and send leave info to client
+    // delete the chat room in the hub
     let users = vec![friend.requester_id, friend.addressee_id];
-    state.hub.remove_members(friend.room_id, &users).await?;
+    state.hub.delete_room(friend.room_id, &users).await?;
 
-    // send user info to the other side
+    // send user's info to the friend room
     let rsp = DeleteFriendResponse {
         friend_id: client.user_id(),
         room_id: friend.room_id,
@@ -160,7 +161,7 @@ pub async fn delete_friend(
     let msg = ServerEvent::DeleteFriend(rsp).to_msg()?;
     state.hub.tell(req.friend_id, msg).await?;
 
-    // send the other's info to user client
+    // send the friend's info to user client
     let rsp = DeleteFriendResponse {
         friend_id: req.friend_id,
         room_id: friend.room_id,

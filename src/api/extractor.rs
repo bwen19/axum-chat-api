@@ -1,4 +1,4 @@
-//! Defines the extractors used by the different web services.
+//! Defines the extractors used by different web services.
 
 use super::AppState;
 use crate::core::constant::{COOKIE_NAME, ROLE_ADMIN};

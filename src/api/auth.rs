@@ -31,7 +31,7 @@ async fn login(
         .await?
         .ok_or(Error::NotFound)?;
 
-    // verify user status
+    // verify user's status
     if user.deleted {
         return Err(Error::Forbidden);
     }
@@ -44,11 +44,10 @@ async fn login(
     // check password
     verify_password(&req.password, &user.hashed_password)?;
 
-    // create access token with token_duration
+    // create access and refresh tokens
     let access_claims = Claims::from_user(&user, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
-    // create refresh token with session_duration
     let refresh_claims = Claims::from_user(&user, state.config.session_duration);
     let refresh_token = state.jwt.create(&refresh_claims)?;
 
@@ -62,7 +61,11 @@ async fn login(
         )
         .await?;
 
-    // Create new cookie with the refresh token
+    // cache user info in redis
+    let user = user.into();
+    state.db.cache_user(&user).await?;
+
+    // create new cookie with the refresh token
     let mut cookie = Cookie::build(COOKIE_NAME, refresh_token)
         .path("/")
         .same_site(SameSite::Lax)
@@ -70,12 +73,9 @@ async fn login(
         .http_only(true)
         .finish();
     cookie.set_expires(refresh_claims.exp);
-
-    let user = user.into();
-    state.db.cache_user(&user).await?;
+    let cookie_jar = cookie_jar.add(cookie);
 
     // return cookie and response
-    let cookie_jar = cookie_jar.add(cookie);
     let rsp = LoginResponse { user, access_token };
     Ok((cookie_jar, Json(rsp)))
 }
@@ -98,7 +98,7 @@ async fn auto_login(
         }
     }
 
-    // create new access token
+    // create access token
     let access_claims = Claims::from_claims(claims, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
@@ -110,7 +110,7 @@ async fn renew_token(
     State(state): State<Arc<AppState>>,
     CookieGuard(claims): CookieGuard,
 ) -> Result<Json<RenewTokenResponse>, Error> {
-    // Create new access token
+    // create access token
     let access_claims = Claims::from_claims(claims, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
@@ -122,13 +122,14 @@ async fn logout(
     State(state): State<Arc<AppState>>,
     cookie_jar: CookieJar,
 ) -> Result<CookieJar, Error> {
+    // verify token from cookie and delete the session
     if let Some(jwt_cookie) = cookie_jar.get(COOKIE_NAME) {
         if let Ok(claims) = state.jwt.verify(jwt_cookie.value()) {
             let _ = state.db.delete_session(claims.id).await;
         }
     }
 
-    // Return cookie and response
+    // remove token from the cookie
     let mut cookie = Cookie::named(COOKIE_NAME);
     cookie.set_path("/");
     cookie.set_secure(true);

@@ -1,3 +1,5 @@
+//! Methods of Store for managing chat messages
+
 use super::{model::MessageInfo, Store};
 use crate::{api::NewMessageRequest, core::Error};
 use redis::AsyncCommands;

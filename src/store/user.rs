@@ -1,3 +1,5 @@
+//! Methods of Store for managing user accounts
+
 use super::{Store, User, UserInfo};
 use crate::core::constant::{
     CATEGORY_PERSONAL, DEFAULT_AVATAR, PERSONAL_ROOM_COVER, PERSONAL_ROOM_NAME, RANK_MEMBER,
@@ -169,7 +171,7 @@ impl Store {
             .map(|v| hash_password(&v))
             .transpose()?;
 
-        sqlx::query_as!(
+        let user = sqlx::query_as!(
             UserInfo,
             r#"
                 UPDATE users
@@ -194,7 +196,10 @@ impl Store {
         )
         .fetch_one(&self.pool)
         .await
-        .on_constraint("users_username_key")
+        .on_constraint("users_username_key")?;
+
+        self.cache_user(&user).await?;
+        Ok(user)
     }
 
     pub async fn change_avatar(&self, user_id: i64, avatar: &str) -> Result<String, Error> {

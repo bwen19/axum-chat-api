@@ -1,10 +1,12 @@
-use super::{cmp_member, cmp_room, MemberInfo, MessageInfo, RoomInfo, Store};
-use crate::{
-    api::CreateUserRequest,
-    core::{constant::CATEGORY_PRIVATE, Error},
+//! Methods of Store for initialization
+
+use super::{cmp_member, cmp_room, FriendInfo, MessageInfo, RoomInfo, Store};
+use crate::api::CreateUserRequest;
+use crate::core::{
+    constant::{STATUS_ACCEPTED, STATUS_ADDING},
+    Error,
 };
 use redis::AsyncCommands;
-use std::collections::{hash_map::Entry, HashMap};
 use time::OffsetDateTime;
 
 impl Store {
@@ -36,93 +38,14 @@ impl Store {
         tracing::info!("db was successfully initialized");
     }
 
-    /// Get a list of rooms that the user has joined
+    /// Get all the user joined rooms
     pub async fn get_user_rooms(
         &self,
         user_id: i64,
         timestamp: i64,
     ) -> Result<Vec<RoomInfo>, Error> {
         // get user's rooms and members of each room
-        let members = sqlx::query_as!(
-            RoomMemberRow,
-            r#"
-                WITH rooms_cte AS (
-                    SELECT
-                        id AS room_id, name, cover, category, create_at
-                    FROM rooms
-                    WHERE id IN (
-                        SELECT room_id
-                        FROM members
-                        WHERE member_id = $1
-                    )
-                )
-                SELECT
-                    room_id, name, cover, category, create_at,
-                    member_id, rank, join_at, nickname, avatar
-                FROM rooms_cte AS r,
-                    LATERAL (
-                        SELECT
-                            member_id, rank, join_at, nickname, avatar
-                        FROM members AS y
-                        JOIN users AS u ON y.member_id = u.id
-                        WHERE y.room_id = r.room_id
-                    ) AS m
-            "#,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut rooms: HashMap<i64, RoomInfo> = HashMap::new();
-
-        for r in members {
-            let member = MemberInfo {
-                id: r.member_id,
-                name: r.nickname,
-                avatar: r.avatar,
-                rank: r.rank,
-                join_at: r.join_at,
-            };
-
-            let is_private = r.category == CATEGORY_PRIVATE && member.id != user_id;
-
-            match rooms.entry(r.room_id) {
-                Entry::Occupied(mut o) => {
-                    let room = o.get_mut();
-                    if is_private {
-                        room.name = member.name.clone();
-                        room.cover = member.avatar.clone();
-                    }
-                    room.members.push(member);
-                }
-                Entry::Vacant(v) => {
-                    let room = if is_private {
-                        RoomInfo {
-                            id: r.room_id,
-                            name: member.name.clone(),
-                            cover: member.avatar.clone(),
-                            category: r.category,
-                            create_at: r.create_at,
-                            unreads: 0,
-                            members: vec![member],
-                            messages: Vec::new(),
-                        }
-                    } else {
-                        RoomInfo {
-                            id: r.room_id,
-                            name: r.name,
-                            cover: r.cover,
-                            category: r.category,
-                            create_at: r.create_at,
-                            unreads: 0,
-                            members: vec![member],
-                            messages: Vec::new(),
-                        }
-                    };
-                    v.insert(room);
-                }
-            }
-        }
+        let rooms = self.get_user_rooms_members(user_id).await?;
 
         let mut rooms_info = Vec::new();
         let mut con = self.client.get_async_connection().await?;
@@ -133,7 +56,7 @@ impl Store {
             let mut offset = 0_i64;
             for m in messages.iter().rev() {
                 let mut msg = serde_json::from_str::<MessageInfo>(m)?;
-                let new_offset = (timestamp - msg.send_at.unix_timestamp()) / 86400;
+                let new_offset = (timestamp - msg.send_at.unix_timestamp() * 1000) / 86400000;
                 if new_offset != offset {
                     msg.divide = true;
                     offset = new_offset;
@@ -147,17 +70,76 @@ impl Store {
         rooms_info.sort_by(cmp_room);
         Ok(rooms_info)
     }
+
+    /// Get all friends of the user
+    pub async fn get_user_friends(&self, user_id: i64) -> Result<Vec<FriendInfo>, Error> {
+        let mut friends: Vec<FriendInfo> = sqlx::query_as!(
+            FriendInfoRow,
+            r#"
+                SELECT
+                    f.room_id, f.status, f.create_at, u.id, u.username,
+                    u.nickname, u.avatar, (f.addressee_id = $1) AS first
+                FROM friends AS f
+                    JOIN users AS u ON u.id = f.addressee_id
+                WHERE
+                    f.requester_id = $1
+                    AND status IN ($2, $3)
+            "#,
+            user_id,
+            STATUS_ADDING,
+            STATUS_ACCEPTED,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map(|arr| arr.into_iter().map(|x| x.into()).collect())?;
+
+        let mut other_friends: Vec<FriendInfo> = sqlx::query_as!(
+            FriendInfoRow,
+            r#"
+                SELECT
+                    f.room_id, f.status, f.create_at, u.id, u.username,
+                    u.nickname, u.avatar, (f.addressee_id = $1) AS first
+                FROM friends AS f
+                    JOIN users AS u ON u.id = f.requester_id
+                WHERE
+                    f.addressee_id = $1
+                    AND status IN ($2, $3)
+            "#,
+            user_id,
+            STATUS_ADDING,
+            STATUS_ACCEPTED,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map(|arr| arr.into_iter().map(|x| x.into()).collect())?;
+
+        friends.append(&mut other_friends);
+        Ok(friends)
+    }
 }
 
-struct RoomMemberRow {
-    room_id: i64,
-    name: String,
-    cover: String,
-    category: String,
-    create_at: OffsetDateTime,
-    member_id: i64,
+struct FriendInfoRow {
+    id: i64,
+    username: String,
     nickname: String,
     avatar: String,
-    rank: String,
-    join_at: OffsetDateTime,
+    status: String,
+    room_id: i64,
+    first: Option<bool>,
+    create_at: OffsetDateTime,
+}
+
+impl From<FriendInfoRow> for FriendInfo {
+    fn from(v: FriendInfoRow) -> Self {
+        Self {
+            id: v.id,
+            username: v.username,
+            nickname: v.nickname,
+            avatar: v.avatar,
+            status: v.status,
+            room_id: v.room_id,
+            first: v.first.unwrap_or(false),
+            create_at: v.create_at,
+        }
+    }
 }

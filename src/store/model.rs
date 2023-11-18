@@ -17,6 +17,7 @@ pub struct User {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     pub id: i64,
     pub username: String,
@@ -55,6 +56,7 @@ pub struct Friend {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FriendInfo {
     pub id: i64,
     pub username: String,
@@ -78,6 +80,7 @@ pub struct Room {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoomInfo {
     pub id: i64,
     pub name: String,
@@ -124,6 +127,7 @@ pub fn cmp_room(a: &RoomInfo, b: &RoomInfo) -> Ordering {
 // ========================= // Member // ========================= //
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct MemberInfo {
     pub id: i64,
     pub name: String,
@@ -151,6 +155,7 @@ pub fn cmp_member(a: &MemberInfo, b: &MemberInfo) -> Ordering {
 // ========================= // Message // ========================= //
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageInfo {
     pub room_id: i64,
     pub sender_id: i64,

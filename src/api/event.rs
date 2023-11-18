@@ -121,6 +121,7 @@ pub enum ServerEvent {
 
     #[serde(rename = "delete-members")]
     DeleteMembers(DeleteMembersResponse),
+
     // Friend
     #[serde(rename = "add-friend")]
     AddFriend(AddFriendResponse),

@@ -70,12 +70,12 @@ where
     E: Into<BoxError>,
 {
     async {
-        // Convert the stream into an `AsyncRead`.
+        // convert the stream into an `AsyncRead`.
         let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
         let body_reader = StreamReader::new(body_with_io_error);
         futures::pin_mut!(body_reader);
 
-        // Copy the body into the file.
+        // copy the body into the file.
         let mut file = BufWriter::new(File::create(path).await?);
         tokio::io::copy(&mut body_reader, &mut file).await?;
 
@@ -100,8 +100,8 @@ pub async fn initialize(
     let friends = state.db.get_user_friends(client.user_id()).await?;
 
     // create connections to the room channels
-    let room_ids: Vec<i64> = rooms.iter().map(|room| room.id).collect();
-    state.hub.connect(client, room_ids).await?;
+    let rooms_id: Vec<i64> = rooms.iter().map(|room| room.id).collect();
+    state.hub.connect(client, rooms_id).await?;
 
     // send rooms and friends info to the client socket
     let rsp = InitializeResponse { rooms, friends };
@@ -123,7 +123,7 @@ pub async fn send_message(
         return Err(Error::Forbidden);
     }
 
-    // create message and store in database
+    // create message and store in redis
     let message = state.db.cache_message(client.user_id(), req).await?;
     let room_id = message.room_id;
 

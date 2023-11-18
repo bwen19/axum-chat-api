@@ -12,8 +12,6 @@ use crate::core::{Error, ResultExt};
 use std::collections::HashMap;
 use time::OffsetDateTime;
 
-// ========================// Friend Store //======================== //
-
 impl Store {
     /// Get the friendship between the two users
     pub async fn get_friend(&self, user0_id: i64, user1_id: i64) -> Result<Option<Friend>, Error> {
@@ -248,7 +246,7 @@ impl Store {
         .execute(&mut *transaction)
         .await?;
 
-        if res.rows_affected() != 1 {
+        if res.rows_affected() != 2 {
             return Err(Error::Database);
         }
 
@@ -331,52 +329,6 @@ impl Store {
 
         Ok(())
     }
-
-    /// Get all friends of the user
-    pub async fn get_user_friends(&self, user_id: i64) -> Result<Vec<FriendInfo>, Error> {
-        let mut friends: Vec<FriendInfo> = sqlx::query_as!(
-            FriendInfoRow,
-            r#"
-                SELECT
-                    f.room_id, f.status, f.create_at, u.id, u.username,
-                    u.nickname, u.avatar, (f.requester_id = $1) AS first
-                FROM friends AS f
-                    JOIN users AS u ON u.id = f.addressee_id
-                WHERE
-                    f.requester_id = $1
-                    AND status IN ($2, $3)
-            "#,
-            user_id,
-            STATUS_ADDING,
-            STATUS_ACCEPTED,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map(|arr| arr.into_iter().map(|x| x.into()).collect())?;
-
-        let mut other_friends: Vec<FriendInfo> = sqlx::query_as!(
-            FriendInfoRow,
-            r#"
-                SELECT
-                    f.room_id, f.status, f.create_at, u.id, u.username,
-                    u.nickname, u.avatar, (f.requester_id = $1) AS first
-                FROM friends AS f
-                    JOIN users AS u ON u.id = f.requester_id
-                WHERE
-                    f.addressee_id = $1
-                    AND status IN ($2, $3)
-            "#,
-            user_id,
-            STATUS_ADDING,
-            STATUS_ACCEPTED,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map(|arr| arr.into_iter().map(|x| x.into()).collect())?;
-
-        friends.append(&mut other_friends);
-        Ok(friends)
-    }
 }
 
 // ========================// Conversions //======================== //
@@ -430,30 +382,4 @@ struct RoomMemberRow {
     avatar: String,
     rank: String,
     join_at: OffsetDateTime,
-}
-
-struct FriendInfoRow {
-    id: i64,
-    username: String,
-    nickname: String,
-    avatar: String,
-    status: String,
-    room_id: i64,
-    first: Option<bool>,
-    create_at: OffsetDateTime,
-}
-
-impl From<FriendInfoRow> for FriendInfo {
-    fn from(v: FriendInfoRow) -> Self {
-        Self {
-            id: v.id,
-            username: v.username,
-            nickname: v.nickname,
-            avatar: v.avatar,
-            status: v.status,
-            room_id: v.room_id,
-            first: v.first.unwrap_or(false),
-            create_at: v.create_at,
-        }
-    }
 }

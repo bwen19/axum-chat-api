@@ -1,9 +1,16 @@
-use super::Store;
+//! Methods of Store for managing room members
+
+use super::{RoomInfo, Store};
+use crate::core::{
+    constant::{CATEGORY_PRIVATE, RANK_MEMBER},
+    Error, ResultExt,
+};
 use crate::{
     api::{AddMembersRequest, DeleteMembersRequest},
-    core::{constant::RANK_MEMBER, Error, ResultExt},
     store::MemberInfo,
 };
+use std::collections::{hash_map::Entry, HashMap};
+use time::OffsetDateTime;
 
 impl Store {
     /// Add members into the room and return these members info
@@ -86,4 +93,105 @@ impl Store {
         .await
         .not_found()
     }
+
+    pub async fn get_user_rooms_members(
+        &self,
+        user_id: i64,
+    ) -> Result<HashMap<i64, RoomInfo>, Error> {
+        let members = sqlx::query_as!(
+            RoomMemberRow,
+            r#"
+                WITH rooms_cte AS (
+                    SELECT
+                        id AS room_id, name, cover, category, create_at
+                    FROM rooms
+                    WHERE id IN (
+                        SELECT room_id
+                        FROM members
+                        WHERE member_id = $1
+                    )
+                )
+                SELECT
+                    room_id, name, cover, category, create_at,
+                    member_id, rank, join_at, nickname, avatar
+                FROM rooms_cte AS r,
+                    LATERAL (
+                        SELECT
+                            member_id, rank, join_at, nickname, avatar
+                        FROM members AS y
+                        JOIN users AS u ON y.member_id = u.id
+                        WHERE y.room_id = r.room_id
+                    ) AS m
+            "#,
+            user_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut rooms: HashMap<i64, RoomInfo> = HashMap::new();
+
+        for r in members {
+            let member = MemberInfo {
+                id: r.member_id,
+                name: r.nickname,
+                avatar: r.avatar,
+                rank: r.rank,
+                join_at: r.join_at,
+            };
+
+            let is_private = r.category == CATEGORY_PRIVATE && member.id != user_id;
+
+            match rooms.entry(r.room_id) {
+                Entry::Occupied(mut o) => {
+                    let room = o.get_mut();
+                    if is_private {
+                        room.name = member.name.clone();
+                        room.cover = member.avatar.clone();
+                    }
+                    room.members.push(member);
+                }
+                Entry::Vacant(v) => {
+                    let room = if is_private {
+                        RoomInfo {
+                            id: r.room_id,
+                            name: member.name.clone(),
+                            cover: member.avatar.clone(),
+                            category: r.category,
+                            create_at: r.create_at,
+                            unreads: 0,
+                            members: vec![member],
+                            messages: Vec::new(),
+                        }
+                    } else {
+                        RoomInfo {
+                            id: r.room_id,
+                            name: r.name,
+                            cover: r.cover,
+                            category: r.category,
+                            create_at: r.create_at,
+                            unreads: 0,
+                            members: vec![member],
+                            messages: Vec::new(),
+                        }
+                    };
+                    v.insert(room);
+                }
+            }
+        }
+
+        Ok(rooms)
+    }
+}
+
+struct RoomMemberRow {
+    room_id: i64,
+    name: String,
+    cover: String,
+    category: String,
+    create_at: OffsetDateTime,
+    member_id: i64,
+    nickname: String,
+    avatar: String,
+    rank: String,
+    join_at: OffsetDateTime,
 }

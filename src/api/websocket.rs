@@ -42,11 +42,12 @@ async fn websocket(socket: WebSocket, state: Arc<AppState>, claims: Claims) {
                     }
                 }
                 _ = interval.tick() => {
-                    let _ = sender.send(Message::Ping(Vec::default())).await;
+                    if sender.send(Message::Ping(Vec::new())).await.is_err() {
+                        break;
+                    }
                 }
             }
         }
-        tracing::debug!("Close socket from send task");
     });
 
     // this task will receive client message and process
@@ -58,26 +59,18 @@ async fn websocket(socket: WebSocket, state: Arc<AppState>, claims: Claims) {
             while let Some(Ok(msg)) = receiver.next().await {
                 match msg {
                     Message::Text(text) => {
+                        tracing::debug!("event: {}", text);
                         if let Ok(event) = serde_json::from_str::<ClientEvent>(&text) {
-                            tracing::debug!("processing {}", text);
                             if event.process(&state, &client).await.is_err() {
                                 break;
                             }
-                        } else {
-                            tracing::debug!("Receive text message from client: {}", text);
                         }
                     }
-                    Message::Close(_) => {
-                        tracing::debug!("Receive close message from client");
-                        break;
-                    }
+                    Message::Close(_) => break,
                     Message::Pong(_) => {}
-                    _ => {
-                        tracing::debug!("Receive other message from client");
-                    }
+                    _ => {}
                 }
             }
-            tracing::debug!("Close socket from recv task");
         })
     };
 
@@ -88,5 +81,5 @@ async fn websocket(socket: WebSocket, state: Arc<AppState>, claims: Claims) {
 
     // Disconnecting the channels
     let _ = state.hub.disconnect(&client).await;
-    tracing::debug!("Disconnect WebSocket {} {}", client.user_id(), client.id());
+    tracing::debug!("socket disconnect {}:{}", client.user_id(), client.id());
 }

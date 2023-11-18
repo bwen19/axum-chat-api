@@ -40,7 +40,7 @@ pub fn validate_id_vec(ids: &Vec<i64>) -> Result<(), ValidationError> {
     for &id in ids {
         if id < 1 || !seen.insert(id) {
             let mut e = ValidationError::new("vec");
-            let msg = format!("must be greater than 0 and not contain duplicate numbers");
+            let msg = format!("Must be greater than 0 and not contain duplicate numbers");
             e.message = Some(Cow::from(msg));
             return Err(e);
         }
@@ -54,7 +54,7 @@ fn validate_oneof(item: &str, items: &Vec<&str>) -> Result<(), ValidationError> 
         Ok(())
     } else {
         let mut e = ValidationError::new("validate_oneof");
-        let msg = format!("must be one of {}", items.join(","));
+        let msg = format!("Must be one of {}", items.join(","));
         e.message = Some(Cow::from(msg));
         Err(e)
     }

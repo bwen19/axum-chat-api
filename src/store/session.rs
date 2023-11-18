@@ -1,3 +1,5 @@
+//! Methods of Store for managing auth sessions
+
 use super::Store;
 use crate::core::Error;
 use redis::AsyncCommands;

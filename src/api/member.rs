@@ -2,7 +2,7 @@
 
 use super::{
     event::ServerEvent, AddMembersRequest, AddMembersResponse, AppState, DeleteMembersRequest,
-    DeleteMembersResponse, NewRoomResponse,
+    DeleteMembersResponse, DeleteRoomResponse, NewRoomResponse,
 };
 use crate::{
     conn::Client,
@@ -33,6 +33,8 @@ pub async fn add_members(
     let rsp = AddMembersResponse { room_id, members };
     let msg = ServerEvent::AddMembers(rsp).to_msg()?;
     state.hub.broadcast(room_id, msg).await?;
+
+    // join members in the chat room
     state.hub.add_members(room_id, &users_id).await?;
 
     // notice the new members
@@ -68,6 +70,11 @@ pub async fn delete_members(
 
     // remove connection in the hub
     state.hub.remove_members(room_id, &members_id).await?;
+
+    // notice the deleted members
+    let rsp = DeleteRoomResponse { room_id };
+    let msg = ServerEvent::DeleteRoom(rsp).to_msg()?;
+    state.hub.notify(&members_id, msg).await?;
 
     // notice other room members
     let rsp = DeleteMembersResponse {

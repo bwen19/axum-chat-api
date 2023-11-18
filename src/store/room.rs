@@ -1,8 +1,11 @@
+//! Methods of Store for managing chat rooms
+
 use super::model::{MemberInfo, Room, RoomInfo};
 use super::{cmp_member, Store};
 use crate::api::{NewRoomRequest, UpdateRoomResponse, UpdateRoomResquest};
 use crate::core::constant::{CATEGORY_PUBLIC, PUBLIC_ROOM_COVER, RANK_MEMBER, RANK_OWNER};
 use crate::core::{Error, ResultExt};
+use redis::AsyncCommands;
 
 impl Store {
     /// Create room and add initial members
@@ -110,18 +113,21 @@ impl Store {
     /// In general, only the admin and owner of the room can delete the room.
     /// So, one should check that before call the function.
     pub async fn delete_room(&self, room_id: i64) -> Result<Vec<i64>, Error> {
-        // get all members ID
+        let mut transaction = self.pool.begin().await?;
+
+        // delete members and return all members ID
         let members_id = sqlx::query_scalar!(
             r#"
-                SELECT member_id
-                FROM members
+                DELETE FROM members
                 WHERE room_id = $1
+                RETURNING member_id
             "#,
             room_id
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await?;
 
+        // delete room
         sqlx::query!(
             r#"
                 DELETE FROM rooms
@@ -129,8 +135,15 @@ impl Store {
             "#,
             room_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+
+        transaction.commit().await?;
+
+        // delete messages stored in redis
+        let mut con = self.client.get_async_connection().await?;
+        let key = format!("room:{}", room_id);
+        con.del(key).await?;
 
         Ok(members_id)
     }

@@ -108,10 +108,11 @@ impl HubState {
     }
 
     fn get_room_chan(&mut self, room_id: i64) -> mpsc::Sender<RoomAction> {
-        self.rooms
-            .get(&room_id)
-            .map(|r| r.tx.clone())
-            .unwrap_or(self.create_room(room_id))
+        if let Some(rs) = self.rooms.get(&room_id) {
+            rs.tx.clone()
+        } else {
+            self.create_room(room_id)
+        }
     }
 
     fn create_room(&mut self, room_id: i64) -> mpsc::Sender<RoomAction> {

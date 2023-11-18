@@ -113,15 +113,15 @@ pub async fn leave_room(
     };
     let members_id = state.db.delete_members(&req).await?;
 
-    // remove room channels and subscriptions
+    // remove users from the room
     state.hub.remove_members(room_id, &members_id).await?;
 
-    // notice all user's devices
+    // notice user to delete room
     let rsp = DeleteRoomResponse { room_id };
     let msg = ServerEvent::DeleteRoom(rsp).to_msg()?;
     state.hub.broadcast(client.room_id(), msg).await?;
 
-    // notice room members
+    // notice other room members to delete member
     let rsp = DeleteMembersResponse {
         room_id,
         members_id,
