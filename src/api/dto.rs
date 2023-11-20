@@ -149,6 +149,14 @@ pub struct SendFileResponse {
     pub file_url: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HubStatusResponse {
+    pub num_users: usize,
+    pub num_clients: usize,
+    pub num_rooms: usize,
+}
+
 // ============================== // Room // ============================== //
 
 #[derive(Deserialize, Serialize, Validate)]
@@ -182,6 +190,13 @@ pub struct UpdateRoomResquest {
 pub struct UpdateRoomResponse {
     pub room_id: i64,
     pub name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeCoverResponse {
+    pub room_id: i64,
+    pub cover: String,
 }
 
 #[derive(Deserialize, Validate)]

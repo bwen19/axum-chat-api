@@ -18,7 +18,6 @@ pub const CATEGORY_PUBLIC: &str = "public";
 pub const CATEGORY_PRIVATE: &str = "private";
 pub const CATEGORY_PERSONAL: &str = "personal";
 pub const RANK_OWNER: &str = "owner";
-pub const RANK_MANAGER: &str = "manager";
 pub const RANK_MEMBER: &str = "member";
 pub const KIND_TEXT: &str = "text";
 pub const KIND_FILE: &str = "file";

@@ -1,6 +1,6 @@
 //! Defines the router of the server.
 
-use super::{auth, message, user, websocket, AppState};
+use super::{auth, message, room, user, websocket, AppState};
 use crate::Config;
 use axum::{http::header::COOKIE, Router};
 use std::iter::once;
@@ -16,7 +16,10 @@ pub async fn make_app(config: Config) -> Router {
         .merge(websocket::router())
         .nest(
             "/api",
-            auth::router().merge(user::router().merge(message::router())),
+            auth::router()
+                .merge(user::router())
+                .merge(message::router())
+                .merge(room::router()),
         )
         .with_state(state)
         .layer(TraceLayer::new_for_http())

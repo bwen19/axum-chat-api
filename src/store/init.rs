@@ -2,6 +2,7 @@
 
 use super::{cmp_member, cmp_room, FriendInfo, MessageInfo, RoomInfo, Store};
 use crate::api::CreateUserRequest;
+use crate::core::constant::ROLE_ADMIN;
 use crate::core::{
     constant::{STATUS_ACCEPTED, STATUS_ADDING},
     Error,
@@ -24,14 +25,11 @@ impl Store {
             let arg = CreateUserRequest {
                 username: "admin".to_owned(),
                 password: "123456".to_owned(),
-                role: "admin".to_owned(),
+                role: ROLE_ADMIN.to_owned(),
             };
 
-            if let Err(e) = self.create_user(&arg).await {
-                match e {
-                    Error::UniqueConstraint(_) => {}
-                    _ => panic!("failed to create admin account"),
-                }
+            if self.create_user(&arg).await.is_err() {
+                panic!("failed to create admin account");
             };
         }
 

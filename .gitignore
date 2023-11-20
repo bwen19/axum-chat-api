@@ -4,6 +4,7 @@
 
 target/
 app.env
+app-docker-compose.yml
 
 *.log
 

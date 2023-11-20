@@ -1,5 +1,5 @@
-FROM rust:1.69.0-slim-buster AS chef
-RUN cargo install cargo-chef --version 0.1.59 --locked
+FROM rust:1.74.0-slim-buster AS chef
+RUN cargo install cargo-chef --version 0.1.62 --locked
 WORKDIR /app
 
 FROM chef AS planner

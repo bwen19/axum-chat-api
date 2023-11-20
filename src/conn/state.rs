@@ -1,5 +1,6 @@
 use super::client::Client;
 use super::room::{ChatRoom, RoomAction};
+use crate::api::HubStatusResponse;
 use crate::core::{constant::CHAN_CAPACITY, Error};
 use axum::extract::ws::Message;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
@@ -19,6 +20,23 @@ impl HubState {
             room.tx.send(RoomAction::Send(msg)).await?
         }
         Ok(())
+    }
+
+    pub fn status(&self) -> Result<HubStatusResponse, Error> {
+        let num_users = self.users.len();
+        let num_rooms = self.rooms.len();
+
+        let mut num_clients = 0;
+        for us in self.users.values() {
+            num_clients += us.txs.len();
+        }
+
+        let rsp = HubStatusResponse {
+            num_users,
+            num_clients,
+            num_rooms,
+        };
+        Ok(rsp)
     }
 
     pub async fn register_client(&mut self, client: &Client, rooms: Vec<i64>) -> Result<(), Error> {
@@ -82,7 +100,7 @@ impl HubState {
         Ok(())
     }
 
-    pub async fn delete_room(&mut self, room_id: i64, users: &Vec<i64>) -> Result<(), Error> {
+    pub fn delete_room(&mut self, room_id: i64, users: &Vec<i64>) -> Result<(), Error> {
         if let Some(rs) = self.rooms.get(&room_id) {
             for user_id in users {
                 if let Some(us) = self.users.get_mut(user_id) {

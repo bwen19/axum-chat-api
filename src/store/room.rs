@@ -148,6 +148,25 @@ impl Store {
         Ok(members_id)
     }
 
+    pub async fn change_cover(&self, room_id: i64, cover: &str) -> Result<String, Error> {
+        let old_cover = sqlx::query_scalar!(
+            r#"
+                UPDATE rooms AS x
+                SET cover = $1
+                FROM
+                    (SELECT id, cover FROM rooms where id = $2 FOR UPDATE) AS y
+                WHERE x.id = y.id
+                RETURNING y.cover
+            "#,
+            cover,
+            room_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(old_cover)
+    }
+
     pub async fn update_room(&self, req: &UpdateRoomResquest) -> Result<UpdateRoomResponse, Error> {
         sqlx::query_as!(
             UpdateRoomResponse,

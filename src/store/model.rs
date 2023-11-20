@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use time::OffsetDateTime;
 
+use crate::core::constant::RANK_OWNER;
+
 // ========================= // User // ========================= //
 
 pub struct User {
@@ -137,19 +139,16 @@ pub struct MemberInfo {
     pub join_at: OffsetDateTime,
 }
 
-fn numeric_rank(rank: &str) -> i64 {
-    match rank {
-        "owner" => 1,
-        "manager" => 2,
-        "member" => 5,
-        _ => 10,
-    }
-}
-
 pub fn cmp_member(a: &MemberInfo, b: &MemberInfo) -> Ordering {
-    let a_rank = numeric_rank(&a.rank);
-    let b_rank = numeric_rank(&b.rank);
-    a_rank.cmp(&b_rank)
+    if a.rank == RANK_OWNER {
+        Ordering::Less
+    } else {
+        if b.rank == RANK_OWNER {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
 }
 
 // ========================= // Message // ========================= //

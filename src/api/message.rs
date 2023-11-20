@@ -1,10 +1,10 @@
 //! Handlers for messages
 
 use super::{
+    dto::{InitializeRequest, InitializeResponse, NewMessageRequest, SendFileResponse},
     event::ServerEvent,
-    extractor::AuthGuard,
+    extractor::CookieGuard,
     AppState, NewMessageResponse,
-    {InitializeRequest, InitializeResponse, NewMessageRequest, SendFileResponse},
 };
 use crate::{conn::Client, core::Error, util};
 use axum::{
@@ -35,7 +35,7 @@ pub fn router() -> Router<Arc<AppState>> {
 
 async fn send_file(
     State(state): State<Arc<AppState>>,
-    AuthGuard(_): AuthGuard,
+    CookieGuard(_): CookieGuard,
     mut multipart: Multipart,
 ) -> Result<Json<SendFileResponse>, Error> {
     let file_url = if let Some(field) = multipart.next_field().await.unwrap() {

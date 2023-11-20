@@ -16,6 +16,12 @@ pub fn generate_avatar_name(user_id: i64) -> String {
     format!("/avatar/img{}-{}{}", user_id, random_string(6), ts)
 }
 
+/// Generate random room cover name
+pub fn generate_cover_name(room_id: i64) -> String {
+    let ts = OffsetDateTime::now_utc().unix_timestamp();
+    format!("/cover/img{}-{}{}", room_id, random_string(6), ts)
+}
+
 /// Generate random file path name
 pub fn generate_file_name(file_name: &str) -> String {
     let ts = OffsetDateTime::now_utc().unix_timestamp();

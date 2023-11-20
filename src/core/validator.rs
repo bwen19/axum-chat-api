@@ -1,8 +1,8 @@
 //! Custom validators
 
 use super::constant::{
-    CATEGORY_PERSONAL, CATEGORY_PRIVATE, CATEGORY_PUBLIC, KIND_FILE, KIND_TEXT, RANK_MANAGER,
-    RANK_MEMBER, RANK_OWNER, ROLE_ADMIN, ROLE_USER, STATUS_ACCEPTED, STATUS_ADDING, STATUS_DELETED,
+    CATEGORY_PERSONAL, CATEGORY_PRIVATE, CATEGORY_PUBLIC, KIND_FILE, KIND_TEXT, RANK_MEMBER,
+    RANK_OWNER, ROLE_ADMIN, ROLE_USER, STATUS_ACCEPTED, STATUS_ADDING, STATUS_DELETED,
 };
 use std::{borrow::Cow, collections::HashSet};
 use validator::ValidationError;
@@ -26,7 +26,7 @@ pub fn validate_room_category(category: &str) -> Result<(), ValidationError> {
 
 #[allow(dead_code)]
 pub fn validate_room_rank(rank: &str) -> Result<(), ValidationError> {
-    let ranks = vec![RANK_OWNER, RANK_MANAGER, RANK_MEMBER];
+    let ranks = vec![RANK_OWNER, RANK_MEMBER];
     validate_oneof(rank, &ranks)
 }
 

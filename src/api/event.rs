@@ -1,6 +1,6 @@
 //! Event objects defined for WebSocket
 
-use super::{friend, member, message, room};
+use super::{friend, member, message, room, ChangeCoverResponse};
 use super::{
     AcceptFriendRequest, AcceptFriendResponse, AddFriendRequest, AddFriendResponse,
     AddMembersRequest, AddMembersResponse, AppState, DeleteFriendRequest, DeleteFriendResponse,
@@ -108,6 +108,9 @@ pub enum ServerEvent {
     // Room
     #[serde(rename = "new-room")]
     NewRoom(NewRoomResponse),
+
+    #[serde(rename = "change-cover")]
+    ChangeCover(ChangeCoverResponse),
 
     #[serde(rename = "update-room")]
     UpdateRoom(UpdateRoomResponse),

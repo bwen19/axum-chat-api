@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     conn::Client,
-    core::{constant::RANK_MEMBER, Error},
+    core::{constant::RANK_OWNER, Error},
 };
 use std::sync::Arc;
 use validator::Validate;
@@ -21,7 +21,7 @@ pub async fn add_members(
     // check if room exist and user has permission
     let room_id = req.room_id;
     let rank = state.db.get_rank(client.user_id(), room_id).await?;
-    if rank == RANK_MEMBER {
+    if rank != RANK_OWNER {
         return Err(Error::Forbidden);
     }
 
@@ -53,10 +53,10 @@ pub async fn delete_members(
 ) -> Result<(), Error> {
     req.validate()?;
 
-    // check if room exist and user has permission (manager)
+    // check if room exist and user has permission
     let room_id = req.room_id;
     let rank = state.db.get_rank(client.user_id(), room_id).await?;
-    if rank == RANK_MEMBER {
+    if rank != RANK_OWNER {
         return Err(Error::Forbidden);
     }
 

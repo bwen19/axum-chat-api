@@ -218,6 +218,11 @@ impl Store {
         .fetch_one(&self.pool)
         .await?;
 
+        if let Ok(mut user) = self.get_cache_user(user_id).await {
+            user.avatar = avatar.to_string();
+            self.cache_user(&user).await?;
+        }
+
         Ok(old_avatar)
     }
 
