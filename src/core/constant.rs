@@ -1,6 +1,9 @@
-pub const COOKIE_NAME: &str = "jwt";
-pub const CHAN_CAPACITY: usize = 100;
+pub const ACCESS_KEY: &str = "access";
+pub const REFRESH_KEY: &str = "refresh";
+
 pub const IMAGE_KEY: &str = "image";
+pub const CHAN_CAPACITY: usize = 100;
+pub const WS_SUB_PROTOCOL_KEY: &str = "chat";
 
 pub const PERSONAL_ROOM_NAME: &str = "My Device";
 pub const PERSONAL_ROOM_COVER: &str = "/cover/personal";

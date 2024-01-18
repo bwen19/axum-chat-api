@@ -3,7 +3,7 @@
 use super::{
     dto::{InitializeRequest, InitializeResponse, NewMessageRequest, SendFileResponse},
     event::ServerEvent,
-    extractor::CookieGuard,
+    extractor::RefreshGuard,
     AppState, NewMessageResponse,
 };
 use crate::{conn::Client, core::Error, util};
@@ -21,24 +21,20 @@ use std::{
 };
 use tokio::{fs::File, io::BufWriter};
 use tokio_util::io::StreamReader;
-use tower_http::limit::RequestBodyLimitLayer;
 use validator::Validate;
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/message/file", post(send_file))
-        .layer(DefaultBodyLimit::disable())
-        .layer(RequestBodyLimitLayer::new(
-            150 * 1024 * 1024, /* 150mb */
-        ))
+        .layer(DefaultBodyLimit::max(150 * 1024 * 1024))
 }
 
 async fn send_file(
     State(state): State<Arc<AppState>>,
-    CookieGuard(_): CookieGuard,
+    RefreshGuard(_): RefreshGuard,
     mut multipart: Multipart,
 ) -> Result<Json<SendFileResponse>, Error> {
-    let file_url = if let Some(field) = multipart.next_field().await.unwrap() {
+    let file_url = if let Some(field) = multipart.next_field().await? {
         let file_name = if let Some(file_name) = field.file_name() {
             file_name.to_owned()
         } else {

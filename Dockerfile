@@ -1,4 +1,4 @@
-FROM rust:1.74.0-slim-buster AS chef
+FROM rust:1.75.0-slim-buster AS chef
 RUN cargo install cargo-chef --version 0.1.62 --locked
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN cargo build --release
 FROM gcr.io/distroless/cc-debian11 AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/server .
-COPY app.env .env
+COPY prod.env .env
 COPY migrations .
 EXPOSE 8080
 CMD [ "/app/server" ]

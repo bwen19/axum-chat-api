@@ -28,9 +28,9 @@ impl Store {
                 role: ROLE_ADMIN.to_owned(),
             };
 
-            if self.create_user(&arg).await.is_err() {
-                panic!("failed to create admin account");
-            };
+            self.create_user(&arg)
+                .await
+                .expect("failed to create admin account");
         }
 
         tracing::info!("db was successfully initialized");

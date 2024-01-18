@@ -1,7 +1,8 @@
 //! Handlers for websocket
 
-use super::{extractor::CookieGuard, AppState};
+use super::{extractor::WsGuard, AppState};
 use crate::api::event::ClientEvent;
+use crate::core::constant::{CHAN_CAPACITY, WS_SUB_PROTOCOL_KEY};
 use crate::{conn::Client, util::token::Claims};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
@@ -18,9 +19,10 @@ pub fn router() -> Router<Arc<AppState>> {
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
-    CookieGuard(claims): CookieGuard,
+    WsGuard(claims): WsGuard,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| websocket(socket, state, claims))
+    ws.protocols([WS_SUB_PROTOCOL_KEY])
+        .on_upgrade(move |socket| websocket(socket, state, claims))
 }
 
 async fn websocket(socket: WebSocket, state: Arc<AppState>, claims: Claims) {
@@ -28,7 +30,7 @@ async fn websocket(socket: WebSocket, state: Arc<AppState>, claims: Claims) {
     let (mut sender, mut receiver) = socket.split();
 
     // create a mpsc channel for passing message
-    let (tx, mut rx) = mpsc::channel(100);
+    let (tx, mut rx) = mpsc::channel(CHAN_CAPACITY);
     let client = Client::new(claims.user_id, claims.room_id, tx);
 
     // this task will receive message from mpsc channel and send to client

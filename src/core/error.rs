@@ -1,7 +1,10 @@
 //! Custom error types
 
 use axum::{
-    extract::rejection::{JsonRejection, QueryRejection, TypedHeaderRejection},
+    extract::{
+        multipart::MultipartError,
+        rejection::{JsonRejection, QueryRejection},
+    },
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -50,9 +53,6 @@ pub enum Error {
     #[error(transparent)]
     JsonRejection(#[from] JsonRejection),
 
-    #[error(transparent)]
-    TypedHeaderRejection(#[from] TypedHeaderRejection),
-
     // 500 Internal Server Error
     #[error("Argon2 internal error")]
     Argon2,
@@ -71,6 +71,9 @@ pub enum Error {
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    MultipartError(#[from] MultipartError),
 
     #[error(transparent)]
     JwtToken(#[from] jsonwebtoken::errors::Error),
@@ -113,10 +116,10 @@ impl Error {
             Error::Forbidden => StatusCode::FORBIDDEN,
             // 404
             Error::NotFound => StatusCode::NOT_FOUND,
+            // 404
+            Error::MultipartError(ref mult) => mult.status(),
             // 422
-            Error::QueryRejection(_) | Error::JsonRejection(_) | Error::TypedHeaderRejection(_) => {
-                StatusCode::UNPROCESSABLE_ENTITY
-            }
+            Error::QueryRejection(_) | Error::JsonRejection(_) => StatusCode::UNPROCESSABLE_ENTITY,
             _ => {
                 tracing::error!("{}", self.to_string());
                 return (

@@ -1,7 +1,7 @@
 //! Handlers for user accounts
 
 use super::{
-    extractor::{AdminGuard, AuthGuard, CookieGuard, ValidJson, ValidQuery},
+    extractor::{AdminGuard, AuthGuard, RefreshGuard, ValidJson, ValidQuery},
     AppState, ChangeAvatarResponse, ChangePasswordRequest, CreateUserRequest, CreateUserResponse,
     FindUserResponse, ListUsersRequest, ListUsersResponse, UpdateUserRequest, UpdateUserResponse,
 };
@@ -71,7 +71,7 @@ async fn update_user(
 
 async fn change_avatar(
     State(state): State<Arc<AppState>>,
-    CookieGuard(claims): CookieGuard,
+    RefreshGuard(claims): RefreshGuard,
     mut multipart: Multipart,
 ) -> Result<Json<ChangeAvatarResponse>, Error> {
     let avatar = util::common::generate_avatar_name(claims.user_id);

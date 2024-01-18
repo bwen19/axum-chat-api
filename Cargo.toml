@@ -1,11 +1,10 @@
 [package]
 name = "server"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.6", features = ["headers", "ws", "multipart"] }
-axum-extra = { version = "0.8", features = ["cookie"] }
+axum = { version = "0.7", features = ["ws", "multipart"] }
 argon2 = "0.5"
 dotenvy = "0.15"
 futures = "0.3"
@@ -19,7 +18,8 @@ thiserror = "1"
 time = { version = "0.3", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
-tower-http = { version = "0.4", features = ["sensitive-headers", "trace", "limit"] }
+tower = { version = "0.4", features = ["timeout"]}
+tower-http = { version = "0.5", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 validator = { version = "0.16", features = ["derive"] }

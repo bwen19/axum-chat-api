@@ -59,7 +59,7 @@ mod tests {
     fn verify_token() {
         let jwt = JwtToken::default();
 
-        let claims1 = Claims::new(120, 1, "user".to_owned(), Duration::seconds(1));
+        let claims1 = Claims::new(120, 1, "user", "ee", Duration::seconds(1));
         let token = jwt.create(&claims1).expect("failed to create token");
 
         let claims2 = jwt.verify(&token).expect("failed to decode token");
@@ -75,7 +75,7 @@ mod tests {
     fn expired_token() {
         let jwt = JwtToken::default();
 
-        let claims1 = Claims::new(120, 1, "user".to_owned(), Duration::seconds(-61));
+        let claims1 = Claims::new(120, 1, "user", "ee", Duration::seconds(-61));
         let token = jwt.create(&claims1).expect("failed to create token");
 
         let res = jwt.verify(&token);
@@ -91,7 +91,7 @@ mod tests {
     fn invalid_token() {
         let jwt = JwtToken::default();
 
-        let claims1 = Claims::new(120, 1, "user".to_owned(), Duration::minutes(10));
+        let claims1 = Claims::new(120, 1, "user", "ee", Duration::minutes(10));
         let mut token = jwt.create(&claims1).expect("failed to create token");
 
         let start = token.len() - 3;

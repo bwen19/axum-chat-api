@@ -24,12 +24,20 @@ pub struct LoginRequest {
 pub struct LoginResponse {
     pub user: UserInfo,
     pub access_token: String,
+    pub refresh_token: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoLoginRequest {
     pub is_admin: Option<bool>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoLoginResponse {
+    pub user: UserInfo,
+    pub access_token: String,
 }
 
 #[derive(Serialize)]

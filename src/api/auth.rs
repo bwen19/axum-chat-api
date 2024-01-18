@@ -1,14 +1,15 @@
 //! Handlers for authentication
 
-use super::extractor::{CookieGuard, ValidJson};
-use super::{AppState, AutoLoginRequest, LoginRequest, LoginResponse, RenewTokenResponse};
-use crate::core::constant::{COOKIE_NAME, ROLE_ADMIN};
+use super::{
+    extractor::{RefreshGuard, ValidJson},
+    AppState, AutoLoginRequest, AutoLoginResponse, LoginRequest, LoginResponse, RenewTokenResponse,
+};
+use crate::core::constant::{ACCESS_KEY, REFRESH_KEY, ROLE_ADMIN};
 use crate::{
     core::Error,
     util::{password::verify_password, token::Claims},
 };
 use axum::{extract::State, routing::post, Json, Router};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use std::sync::Arc;
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -21,9 +22,8 @@ pub fn router() -> Router<Arc<AppState>> {
 
 async fn login(
     State(state): State<Arc<AppState>>,
-    cookie_jar: CookieJar,
     ValidJson(req): ValidJson<LoginRequest>,
-) -> Result<(CookieJar, Json<LoginResponse>), Error> {
+) -> Result<Json<LoginResponse>, Error> {
     // get user by name
     let user = state
         .db
@@ -45,10 +45,10 @@ async fn login(
     verify_password(&req.password, &user.hashed_password)?;
 
     // create access and refresh tokens
-    let access_claims = Claims::from_user(&user, state.config.token_duration);
+    let access_claims = Claims::from_user(&user, ACCESS_KEY, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
-    let refresh_claims = Claims::from_user(&user, state.config.session_duration);
+    let refresh_claims = Claims::from_user(&user, REFRESH_KEY, state.config.session_duration);
     let refresh_token = state.jwt.create(&refresh_claims)?;
 
     // create session to save refresh token in redis
@@ -65,26 +65,20 @@ async fn login(
     let user = user.into();
     state.db.cache_user(&user).await?;
 
-    // create new cookie with the refresh token
-    let mut cookie = Cookie::build(COOKIE_NAME, refresh_token)
-        .path("/")
-        .same_site(SameSite::Lax)
-        .secure(true)
-        .http_only(true)
-        .finish();
-    cookie.set_expires(refresh_claims.exp);
-    let cookie_jar = cookie_jar.add(cookie);
-
     // return cookie and response
-    let rsp = LoginResponse { user, access_token };
-    Ok((cookie_jar, Json(rsp)))
+    let rsp = LoginResponse {
+        user,
+        access_token,
+        refresh_token,
+    };
+    Ok(Json(rsp))
 }
 
 async fn auto_login(
     State(state): State<Arc<AppState>>,
-    CookieGuard(claims): CookieGuard,
+    RefreshGuard(claims): RefreshGuard,
     Json(req): Json<AutoLoginRequest>,
-) -> Result<Json<LoginResponse>, Error> {
+) -> Result<Json<AutoLoginResponse>, Error> {
     // get user info
     let user = state.db.get_user(claims.user_id).await?;
 
@@ -99,19 +93,19 @@ async fn auto_login(
     }
 
     // create access token
-    let access_claims = Claims::from_claims(claims, state.config.token_duration);
+    let access_claims = Claims::from_claims(claims, ACCESS_KEY, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
-    let rsp = LoginResponse { user, access_token };
+    let rsp = AutoLoginResponse { user, access_token };
     Ok(Json(rsp))
 }
 
 async fn renew_token(
     State(state): State<Arc<AppState>>,
-    CookieGuard(claims): CookieGuard,
+    RefreshGuard(claims): RefreshGuard,
 ) -> Result<Json<RenewTokenResponse>, Error> {
     // create access token
-    let access_claims = Claims::from_claims(claims, state.config.token_duration);
+    let access_claims = Claims::from_claims(claims, ACCESS_KEY, state.config.token_duration);
     let access_token = state.jwt.create(&access_claims)?;
 
     let rsp = RenewTokenResponse { access_token };
@@ -120,21 +114,10 @@ async fn renew_token(
 
 async fn logout(
     State(state): State<Arc<AppState>>,
-    cookie_jar: CookieJar,
-) -> Result<CookieJar, Error> {
-    // verify token from cookie and delete the session
-    if let Some(jwt_cookie) = cookie_jar.get(COOKIE_NAME) {
-        if let Ok(claims) = state.jwt.verify(jwt_cookie.value()) {
-            let _ = state.db.delete_session(claims.id).await;
-        }
-    }
+    RefreshGuard(claims): RefreshGuard,
+) -> Result<(), Error> {
+    // verify token from header and delete the session
+    let _ = state.db.delete_session(claims.id).await;
 
-    // remove token from the cookie
-    let mut cookie = Cookie::named(COOKIE_NAME);
-    cookie.set_path("/");
-    cookie.set_secure(true);
-    cookie.set_http_only(true);
-    let cookie_jar = cookie_jar.remove(cookie);
-
-    Ok(cookie_jar)
+    Ok(())
 }

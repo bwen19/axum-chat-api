@@ -1,6 +1,6 @@
 use server::{make_app, Config};
 use std::net::SocketAddr;
-use tokio::signal;
+use tokio::{net::TcpListener, signal};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -12,7 +12,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "server=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "server=debug,sqlx::query=error,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -20,15 +20,16 @@ async fn main() {
     // Parse our configuration from the environment
     let config = Config::from_env();
 
-    let addr: SocketAddr = config.server_addr
+    let addr: SocketAddr = config
+        .server_addr
         .parse()
         .expect("Can not parse server address");
     tracing::info!("listening on {}", addr);
 
+    let listener = TcpListener::bind(addr).await.unwrap();
     let app = make_app(config).await;
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("failed to start server");

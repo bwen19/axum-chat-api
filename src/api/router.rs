@@ -2,9 +2,15 @@
 
 use super::{auth, message, room, user, websocket, AppState};
 use crate::Config;
-use axum::{http::header::COOKIE, Router};
-use std::iter::once;
-use tower_http::{sensitive_headers::SetSensitiveRequestHeadersLayer, trace::TraceLayer};
+use axum::{
+    error_handling::HandleErrorLayer,
+    http::{header, Method, StatusCode},
+    BoxError, Router,
+};
+use std::time::Duration;
+use tower::{timeout::TimeoutLayer, ServiceBuilder};
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
 
 /// Create router of the application.
 ///
@@ -21,7 +27,19 @@ pub async fn make_app(config: Config) -> Router {
                 .merge(message::router())
                 .merge(room::router()),
         )
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(HandleErrorLayer::new(|_: BoxError| async {
+                    StatusCode::REQUEST_TIMEOUT
+                }))
+                .layer(TimeoutLayer::new(Duration::from_secs(10)))
+                .layer(
+                    CorsLayer::new()
+                        .allow_methods([Method::GET, Method::POST])
+                        .allow_origin(Any)
+                        .allow_headers([header::CONTENT_TYPE]),
+                ),
+        )
         .with_state(state)
-        .layer(TraceLayer::new_for_http())
-        .layer(SetSensitiveRequestHeadersLayer::new(once(COOKIE)))
 }
