@@ -23,7 +23,7 @@ pub fn generate_cover_name(room_id: i64) -> String {
 }
 
 /// Generate random file path name
-pub fn generate_file_name(file_name: &str) -> String {
+pub fn generate_file_name(user_id: i64) -> String {
     let ts = OffsetDateTime::now_utc().unix_timestamp();
-    format!("/share/{}{}-{}", random_string(6), ts, file_name)
+    format!("/share/{}{}-{}", user_id, random_string(8), ts)
 }

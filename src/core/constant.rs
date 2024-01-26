@@ -23,4 +23,5 @@ pub const CATEGORY_PERSONAL: &str = "personal";
 pub const RANK_OWNER: &str = "owner";
 pub const RANK_MEMBER: &str = "member";
 pub const KIND_TEXT: &str = "text";
+pub const KIND_IMAGE: &str = "image";
 pub const KIND_FILE: &str = "file";

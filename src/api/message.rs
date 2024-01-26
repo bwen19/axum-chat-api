@@ -6,7 +6,14 @@ use super::{
     extractor::RefreshGuard,
     AppState, NewMessageResponse,
 };
-use crate::{conn::Client, core::Error, util};
+use crate::{
+    conn::Client,
+    core::{
+        constant::{IMAGE_KEY, KIND_FILE, KIND_IMAGE},
+        Error,
+    },
+    util,
+};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, Multipart, State},
@@ -31,17 +38,27 @@ pub fn router() -> Router<Arc<AppState>> {
 
 async fn send_file(
     State(state): State<Arc<AppState>>,
-    RefreshGuard(_): RefreshGuard,
+    RefreshGuard(claims): RefreshGuard,
     mut multipart: Multipart,
 ) -> Result<Json<SendFileResponse>, Error> {
-    let file_url = if let Some(field) = multipart.next_field().await? {
+    if let Some(field) = multipart.next_field().await? {
         let file_name = if let Some(file_name) = field.file_name() {
-            file_name.to_owned()
+            file_name.trim().to_owned()
         } else {
             return Err(Error::BadRequest);
         };
 
-        let file_url = util::common::generate_file_name(&file_name);
+        let kind = if let Some(content_type) = field.content_type() {
+            if content_type.starts_with(IMAGE_KEY) {
+                KIND_IMAGE.to_owned()
+            } else {
+                KIND_FILE.to_owned()
+            }
+        } else {
+            KIND_FILE.to_owned()
+        };
+
+        let file_url = util::common::generate_file_name(claims.user_id);
         let path = Path::new(&state.config.public_directory).join(&file_url[1..]);
 
         if let Err(e) = stream_to_file(&path, field).await {
@@ -51,12 +68,14 @@ async fn send_file(
             return Err(e);
         }
 
-        file_url
-    } else {
-        return Err(Error::BadRequest);
-    };
-    let rsp = SendFileResponse { file_url };
-    Ok(Json(rsp))
+        let rsp = SendFileResponse {
+            content: file_name,
+            file_url,
+            kind,
+        };
+        return Ok(Json(rsp));
+    }
+    Err(Error::BadRequest)
 }
 
 // Save a `Stream` to a file

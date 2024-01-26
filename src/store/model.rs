@@ -161,6 +161,7 @@ pub struct MessageInfo {
     pub name: String,
     pub avatar: String,
     pub content: String,
+    pub file_url: String,
     pub kind: String,
     pub divide: bool,
     #[serde(with = "time::serde::rfc3339")]

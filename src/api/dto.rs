@@ -142,6 +142,7 @@ pub struct NewMessageRequest {
     pub room_id: i64,
     #[validate(length(min = 1, max = 500, message = "Must be between 1 and 500 characters"))]
     pub content: String,
+    pub file_url: String,
     #[validate(custom = "VAL::validate_message_kind")]
     pub kind: String,
 }
@@ -154,7 +155,9 @@ pub struct NewMessageResponse {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendFileResponse {
+    pub content: String,
     pub file_url: String,
+    pub kind: String,
 }
 
 #[derive(Serialize)]

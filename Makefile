@@ -31,7 +31,7 @@ redis:
 		redis-server --requirepass ${REDIS_HOST_PASSWORD}
 
 container:
-	docker build . -t eruhini2022/chat-server
+	docker build . -t eruhini2022/chat-api
 
 .PHONY: postgres createdb dropdb schema migration migrateup migratedown \
 	prepare redis server container

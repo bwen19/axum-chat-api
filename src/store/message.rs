@@ -19,6 +19,7 @@ impl Store {
             name: user.nickname,
             avatar: user.avatar,
             content: req.content,
+            file_url: req.file_url,
             kind: req.kind,
             divide: false,
             send_at: OffsetDateTime::now_utc(),

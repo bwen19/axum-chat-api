@@ -15,12 +15,12 @@ services:
     volumes:
       - rdsdata:/data
 
-  server:
-    image: eruhini2022/chat-server
+  api:
+    image: eruhini2022/chat-api
     ports:
       - "8080:8080"
     volumes:
-      - /var/www/chat.eruhini.top:/public
+      - ${PUBLIC_DIRECTORY}:/public
     environment:
       - DATABASE_URL=postgres://root:${POSTGRES_PASSWORD}@postgres:5432/chat
       - REDIS_URL=redis://:${REDIS_HOST_PASSWORD}@redis:6379/0

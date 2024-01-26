@@ -1,8 +1,8 @@
 //! Custom validators
 
 use super::constant::{
-    CATEGORY_PERSONAL, CATEGORY_PRIVATE, CATEGORY_PUBLIC, KIND_FILE, KIND_TEXT, RANK_MEMBER,
-    RANK_OWNER, ROLE_ADMIN, ROLE_USER, STATUS_ACCEPTED, STATUS_ADDING, STATUS_DELETED,
+    CATEGORY_PERSONAL, CATEGORY_PRIVATE, CATEGORY_PUBLIC, KIND_FILE, KIND_IMAGE, KIND_TEXT,
+    RANK_MEMBER, RANK_OWNER, ROLE_ADMIN, ROLE_USER, STATUS_ACCEPTED, STATUS_ADDING, STATUS_DELETED,
 };
 use std::{borrow::Cow, collections::HashSet};
 use validator::ValidationError;
@@ -31,7 +31,7 @@ pub fn validate_room_rank(rank: &str) -> Result<(), ValidationError> {
 }
 
 pub fn validate_message_kind(kind: &str) -> Result<(), ValidationError> {
-    let kinds = vec![KIND_TEXT, KIND_FILE];
+    let kinds = vec![KIND_TEXT, KIND_FILE, KIND_IMAGE];
     validate_oneof(kind, &kinds)
 }
 
