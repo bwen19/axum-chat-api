@@ -37,11 +37,7 @@ impl Store {
     }
 
     /// Get all the user joined rooms
-    pub async fn get_user_rooms(
-        &self,
-        user_id: i64,
-        timestamp: i64,
-    ) -> Result<Vec<RoomInfo>, Error> {
+    pub async fn get_user_rooms(&self, user_id: i64) -> Result<Vec<RoomInfo>, Error> {
         // get user's rooms and members of each room
         let rooms = self.get_user_rooms_members(user_id).await?;
 
@@ -50,15 +46,9 @@ impl Store {
 
         for (i, mut room) in rooms {
             let key = format!("room:{}", i);
-            let messages: Vec<String> = con.lrange(key, 0, 19).await?;
-            let mut offset = 0_i64;
+            let messages: Vec<String> = con.lrange(key, 0, 30).await?;
             for m in messages.iter().rev() {
-                let mut msg = serde_json::from_str::<MessageInfo>(m)?;
-                let new_offset = (timestamp - msg.send_at.unix_timestamp() * 1000) / 86400000;
-                if new_offset != offset {
-                    msg.divide = true;
-                    offset = new_offset;
-                }
+                let msg = serde_json::from_str::<MessageInfo>(m)?;
                 room.messages.push(msg);
                 room.members.sort_by(cmp_member);
             }

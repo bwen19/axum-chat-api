@@ -1,16 +1,19 @@
 //! Handlers for authentication
 
 use super::{
-    extractor::{RefreshGuard, ValidJson},
-    AppState, AutoLoginRequest, AutoLoginResponse, LoginRequest, LoginResponse, RenewTokenResponse,
+    extractor::ValidJson, AppState, AutoLoginRequest, LoginRequest, LoginResponse, LogoutRequest,
+    RenewTokenRequest, RenewTokenResponse,
 };
-use crate::core::constant::{ACCESS_KEY, REFRESH_KEY, ROLE_ADMIN};
 use crate::{
-    core::Error,
-    util::{password::verify_password, token::Claims},
+    core::{constant::ROLE_ADMIN, Error},
+    util::{
+        password::verify_password,
+        token::{Claims, JwtTokenPair},
+    },
 };
 use axum::{extract::State, routing::post, Json, Router};
 use std::sync::Arc;
+use time::OffsetDateTime;
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -41,24 +44,17 @@ async fn login(
         }
     }
 
-    // check password
+    // verify password
     verify_password(&req.password, &user.hashed_password)?;
 
-    // create access and refresh tokens
-    let access_claims = Claims::from_user(&user, ACCESS_KEY, state.config.token_duration);
-    let access_token = state.jwt.create(&access_claims)?;
-
-    let refresh_claims = Claims::from_user(&user, REFRESH_KEY, state.config.session_duration);
-    let refresh_token = state.jwt.create(&refresh_claims)?;
+    // create access and refresh tokens pair
+    let JwtTokenPair(access_token, refresh_token, session_id, expire_at) =
+        state.jwt.create_pair((&user).into())?;
 
     // create session to save refresh token in redis
     state
         .db
-        .cache_session(
-            refresh_claims.id,
-            &refresh_token,
-            state.config.session_seconds,
-        )
+        .cache_session(session_id, &refresh_token, state.config.session_seconds)
         .await?;
 
     // cache user info in redis
@@ -70,15 +66,18 @@ async fn login(
         user,
         access_token,
         refresh_token,
+        expire_at,
     };
     Ok(Json(rsp))
 }
 
 async fn auto_login(
     State(state): State<Arc<AppState>>,
-    RefreshGuard(claims): RefreshGuard,
-    Json(req): Json<AutoLoginRequest>,
-) -> Result<Json<AutoLoginResponse>, Error> {
+    ValidJson(req): ValidJson<AutoLoginRequest>,
+) -> Result<Json<LoginResponse>, Error> {
+    // parse claims from refresh token
+    let claims = extract_claims(&state, req.refresh_token).await?;
+
     // get user info
     let user = state.db.get_user(claims.user_id).await?;
 
@@ -92,32 +91,86 @@ async fn auto_login(
         }
     }
 
-    // create access token
-    let access_claims = Claims::from_claims(claims, ACCESS_KEY, state.config.token_duration);
-    let access_token = state.jwt.create(&access_claims)?;
+    // generate new token pair
+    let (access_token, refresh_token, expire_at) = renew_token_pair(&state, &claims).await?;
 
-    let rsp = AutoLoginResponse { user, access_token };
+    let rsp = LoginResponse {
+        user,
+        access_token,
+        refresh_token,
+        expire_at,
+    };
     Ok(Json(rsp))
 }
 
 async fn renew_token(
     State(state): State<Arc<AppState>>,
-    RefreshGuard(claims): RefreshGuard,
+    ValidJson(req): ValidJson<RenewTokenRequest>,
 ) -> Result<Json<RenewTokenResponse>, Error> {
-    // create access token
-    let access_claims = Claims::from_claims(claims, ACCESS_KEY, state.config.token_duration);
-    let access_token = state.jwt.create(&access_claims)?;
+    // parse claims from refresh token
+    let claims = extract_claims(&state, req.refresh_token).await?;
 
-    let rsp = RenewTokenResponse { access_token };
+    // generate new token pair
+    let (access_token, refresh_token, expire_at) = renew_token_pair(&state, &claims).await?;
+
+    let rsp = RenewTokenResponse {
+        access_token,
+        refresh_token,
+        expire_at,
+    };
     Ok(Json(rsp))
 }
 
 async fn logout(
     State(state): State<Arc<AppState>>,
-    RefreshGuard(claims): RefreshGuard,
+    ValidJson(req): ValidJson<LogoutRequest>,
 ) -> Result<(), Error> {
-    // verify token from header and delete the session
+    let claims = extract_claims(&state, req.refresh_token).await?;
     let _ = state.db.delete_session(claims.id).await;
 
     Ok(())
+}
+
+async fn extract_claims(state: &Arc<AppState>, refresh_token: String) -> Result<Claims, Error> {
+    // verify refresh token
+    let claims = state
+        .jwt
+        .verify(&refresh_token)
+        .map_err(|_| Error::Unauthorized)?;
+
+    if !claims.sub {
+        return Err(Error::Forbidden);
+    }
+
+    // check whether refresh_token exists in session
+    let refresh_token = state
+        .db
+        .get_session(claims.id)
+        .await
+        .map_err(|_| Error::Unauthorized)?;
+    if refresh_token != refresh_token {
+        return Err(Error::Unauthorized);
+    }
+
+    Ok(claims)
+}
+
+async fn renew_token_pair(
+    state: &Arc<AppState>,
+    claims: &Claims,
+) -> Result<(String, String, OffsetDateTime), Error> {
+    // generate new token pair
+    let JwtTokenPair(access_token, refresh_token, session_id, expire_at) =
+        state.jwt.renew_pair(claims)?;
+
+    // create new session
+    state
+        .db
+        .cache_session(session_id, &refresh_token, state.config.session_seconds)
+        .await?;
+
+    // delete old session
+    state.db.delete_session(claims.id).await?;
+
+    Ok((access_token, refresh_token, expire_at))
 }

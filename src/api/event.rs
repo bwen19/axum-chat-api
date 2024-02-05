@@ -62,7 +62,7 @@ pub enum ClientEvent {
 impl ClientEvent {
     pub async fn process(self, state: &Arc<AppState>, client: &Client) -> Result<(), Error> {
         let result = match self {
-            ClientEvent::Initialize(req) => message::initialize(state, client, req).await,
+            ClientEvent::Initialize(_) => message::initialize(state, client).await,
             ClientEvent::NewMessage(req) => message::send_message(state, client, req).await,
             ClientEvent::NewRoom(req) => room::create_room(state, client, req).await,
             ClientEvent::UpdateRoom(req) => room::update_room(state, client, req).await,

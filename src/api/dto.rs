@@ -5,6 +5,7 @@ use crate::{
     store::{FriendInfo, MemberInfo, MessageInfo, RoomInfo, UserInfo},
 };
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use validator::Validate;
 
 // ============================== // Auth // ============================== //
@@ -25,25 +26,39 @@ pub struct LoginResponse {
     pub user: UserInfo,
     pub access_token: String,
     pub refresh_token: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub expire_at: OffsetDateTime,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoLoginRequest {
+    #[validate(length(min = 1, message = "Must not be blank"))]
+    pub refresh_token: String,
     pub is_admin: Option<bool>,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct AutoLoginResponse {
-    pub user: UserInfo,
-    pub access_token: String,
+pub struct RenewTokenRequest {
+    #[validate(length(min = 1, message = "Must not be blank"))]
+    pub refresh_token: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenewTokenResponse {
     pub access_token: String,
+    pub refresh_token: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub expire_at: OffsetDateTime,
+}
+
+#[derive(Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct LogoutRequest {
+    #[validate(length(min = 1, message = "Must not be blank"))]
+    pub refresh_token: String,
 }
 
 // ============================== // User // ============================== //
@@ -123,11 +138,8 @@ pub struct FindUserResponse {
 // ============================== // Message // ============================== //
 
 /// Used to get initial rooms and friends
-#[derive(Deserialize, Validate)]
-pub struct InitializeRequest {
-    #[validate(range(min = 1, message = "Invalid timestamp"))]
-    pub timestamp: i64,
-}
+#[derive(Deserialize)]
+pub struct InitializeRequest {}
 
 #[derive(Serialize)]
 pub struct InitializeResponse {

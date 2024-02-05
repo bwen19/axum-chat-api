@@ -1,7 +1,7 @@
 //! Defines the extractors used by different web services.
 
 use super::AppState;
-use crate::core::constant::{ACCESS_KEY, REFRESH_KEY, ROLE_ADMIN};
+use crate::core::constant::ROLE_ADMIN;
 use crate::{core::Error, util::token::Claims};
 use axum::{
     async_trait,
@@ -92,11 +92,11 @@ impl FromRequestParts<Arc<AppState>> for AuthGuard {
         let BearerToken(token) = BearerToken::from_request_parts(parts, state).await?;
         let claims = state.jwt.verify(&token)?;
 
-        if claims.sub == ACCESS_KEY {
-            Ok(AuthGuard(claims))
-        } else {
-            Err(Error::Unauthorized)
+        if claims.sub {
+            return Err(Error::Unauthorized);
         }
+
+        Ok(AuthGuard(claims))
     }
 }
 
@@ -124,34 +124,6 @@ impl FromRequestParts<Arc<AppState>> for AdminGuard {
     }
 }
 
-/// Extracts the refresh JWT Claims from the request header.
-pub struct RefreshGuard(pub Claims);
-
-#[async_trait]
-impl FromRequestParts<Arc<AppState>> for RefreshGuard {
-    type Rejection = Error;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &Arc<AppState>,
-    ) -> Result<Self, Self::Rejection> {
-        let BearerToken(token) = BearerToken::from_request_parts(parts, state).await?;
-        let claims = state.jwt.verify(&token).map_err(|_| Error::Unauthorized)?;
-
-        let refresh_token = state
-            .db
-            .get_session(claims.id)
-            .await
-            .map_err(|_| Error::Unauthorized)?;
-
-        if claims.sub == REFRESH_KEY && refresh_token == token {
-            Ok(RefreshGuard(claims))
-        } else {
-            Err(Error::Unauthorized)
-        }
-    }
-}
-
 /// Extracts the JWT from the request SEC_WEBSOCKET_PROTOCOL.
 pub struct WsGuard(pub Claims);
 
@@ -174,10 +146,10 @@ impl FromRequestParts<Arc<AppState>> for WsGuard {
             .ok_or(Error::Unauthorized)?;
 
         let claims = state.jwt.verify(token.trim())?;
-        if claims.sub == ACCESS_KEY {
-            return Ok(WsGuard(claims));
+        if claims.sub {
+            return Err(Error::Unauthorized);
         }
 
-        Err(Error::Unauthorized)
+        Ok(WsGuard(claims))
     }
 }

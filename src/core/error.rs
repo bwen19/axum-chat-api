@@ -22,13 +22,13 @@ pub enum Error {
     #[error(transparent)]
     Validation(#[from] validator::ValidationErrors),
 
-    #[error("The password doesn't match")]
+    #[error("The password is incorrect")]
     InvalidPassword,
 
     #[error("Already exist on {0}")]
     UniqueConstraint(String),
 
-    #[error("The friend status is invalid")]
+    #[error("Invalid friend status")]
     FriendStatus,
 
     #[error("Bad request")]
@@ -43,7 +43,7 @@ pub enum Error {
     Forbidden,
 
     // 404 NotFound
-    #[error("Not exists")]
+    #[error("Data not found")]
     NotFound,
 
     // 422 UnprocessableEntity
@@ -116,7 +116,7 @@ impl Error {
             Error::Forbidden => StatusCode::FORBIDDEN,
             // 404
             Error::NotFound => StatusCode::NOT_FOUND,
-            // 404
+            // 413
             Error::MultipartError(ref mult) => mult.status(),
             // 422
             Error::QueryRejection(_) | Error::JsonRejection(_) => StatusCode::UNPROCESSABLE_ENTITY,

@@ -3,7 +3,6 @@
 .vscode/
 
 target/
-secret.env
+deploy.env
 
 *.log
-

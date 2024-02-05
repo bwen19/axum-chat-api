@@ -1,9 +1,9 @@
 //! Handlers for messages
 
 use super::{
-    dto::{InitializeRequest, InitializeResponse, NewMessageRequest, SendFileResponse},
+    dto::{InitializeResponse, NewMessageRequest, SendFileResponse},
     event::ServerEvent,
-    extractor::RefreshGuard,
+    extractor::AuthGuard,
     AppState, NewMessageResponse,
 };
 use crate::{
@@ -38,7 +38,7 @@ pub fn router() -> Router<Arc<AppState>> {
 
 async fn send_file(
     State(state): State<Arc<AppState>>,
-    RefreshGuard(claims): RefreshGuard,
+    AuthGuard(claims): AuthGuard,
     mut multipart: Multipart,
 ) -> Result<Json<SendFileResponse>, Error> {
     if let Some(field) = multipart.next_field().await? {
@@ -100,18 +100,9 @@ where
     Ok(())
 }
 
-pub async fn initialize(
-    state: &Arc<AppState>,
-    client: &Client,
-    req: InitializeRequest,
-) -> Result<(), Error> {
-    req.validate()?;
-
+pub async fn initialize(state: &Arc<AppState>, client: &Client) -> Result<(), Error> {
     // get room information from database
-    let rooms = state
-        .db
-        .get_user_rooms(client.user_id(), req.timestamp)
-        .await?;
+    let rooms = state.db.get_user_rooms(client.user_id()).await?;
     let friends = state.db.get_user_friends(client.user_id()).await?;
 
     // create connections to the room channels

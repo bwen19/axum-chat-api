@@ -20,7 +20,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ${PUBLIC_DIRECTORY}:/public
+      - ${EXTERNAL_PUBLIC_DIRECTORY}:/public
     environment:
       - DATABASE_URL=postgres://root:${POSTGRES_PASSWORD}@postgres:5432/chat
       - REDIS_URL=redis://:${REDIS_HOST_PASSWORD}@redis:6379/0

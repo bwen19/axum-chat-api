@@ -7,7 +7,7 @@ use super::dto::{
 };
 use super::{
     event::ServerEvent,
-    extractor::{AdminGuard, RefreshGuard},
+    extractor::{AdminGuard, AuthGuard},
     AppState,
 };
 use crate::core::constant::{IMAGE_KEY, PUBLIC_ROOM_COVER, RANK_OWNER};
@@ -36,7 +36,7 @@ async fn get_status(
 
 async fn change_cover(
     State(state): State<Arc<AppState>>,
-    RefreshGuard(claims): RefreshGuard,
+    AuthGuard(claims): AuthGuard,
     Path(room_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<(), Error> {
